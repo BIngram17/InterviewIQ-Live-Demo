@@ -1234,7 +1234,7 @@ export default function Home() {
         <footer className="demo-footer">
           <strong>InterviewIQ</strong>
           <span>Live AI interview preparation · React · Azure Functions · GitHub Models</span>
-          <a href="https://github.com/BIngram17/InterviewIQ" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
+          <a href="https://github.com/BIngram17/InterviewIQ-Live-Demo" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
         </footer>
       </main>
     </div>
