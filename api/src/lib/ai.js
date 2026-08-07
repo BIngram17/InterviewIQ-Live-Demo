@@ -128,7 +128,7 @@ export async function completeJson({ system, data, maxTokens = 1800, temperature
     if (response.status === 401 || response.status === 403) {
       throw new ApiError(503, "The live AI credential needs attention.");
     }
-    throw new ApiError(502, "Google AI Studio returned an unavailable response.");
+    throw new ApiError(502, `Google AI Studio returned an unavailable response (HTTP ${response.status}).`);
   }
 
   const payload = await response.json();
