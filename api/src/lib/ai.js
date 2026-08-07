@@ -1,5 +1,5 @@
 const API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const rateBuckets = new Map();
 
 export function text(value, maxLength) {
