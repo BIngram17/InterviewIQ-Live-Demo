@@ -34,6 +34,6 @@ app.http("feedback", {
     if (!result.strengths.length || !result.improvements.length || !result.coaching || !result.improvedAnswer) {
       throw new ApiError(502, "The AI response did not contain complete feedback.");
     }
-    return { ...result, provider: "GitHub Models" };
+    return { ...result, provider: "Google AI Studio" };
   }, "feedback"),
 });
