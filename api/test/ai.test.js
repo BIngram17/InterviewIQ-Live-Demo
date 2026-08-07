@@ -27,7 +27,7 @@ test("completeJson sends a structured Gemini request and parses its response", a
   });
 
   assert.deepEqual(result, { score: 8 });
-  assert.match(request.url, /gemini-2\.5-flash:generateContent$/);
+  assert.match(request.url, /gemini-3\.6-flash:generateContent$/);
   assert.equal(request.options.headers["x-goog-api-key"], "test-key");
   const body = JSON.parse(request.options.body);
   assert.equal(body.generationConfig.responseMimeType, "application/json");

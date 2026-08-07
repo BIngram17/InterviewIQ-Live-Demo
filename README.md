@@ -91,7 +91,7 @@ presented as a guarantee against every possible attack.
 | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, CSS |
 | API | Node.js 22, Azure Functions |
-| AI | Google AI Studio / Gemini API, `gemini-2.5-flash` by default |
+| AI | Google AI Studio / Gemini API, `gemini-3.6-flash` by default |
 | Hosting | Azure Static Web Apps |
 | Browser APIs | MediaRecorder, Web Speech, Clipboard, Blob |
 | Security | CSP, iframe sandboxing, input validation, prompt boundaries |
@@ -103,7 +103,7 @@ presented as a guarantee against every possible attack.
 - Node.js 22 or newer
 - A Gemini API key from Google AI Studio
 
-`gemini-2.5-flash` is available on the Gemini API free tier, subject to
+`gemini-3.6-flash` is available on the Gemini API free tier, subject to
 [Google's current quotas and pricing](https://ai.google.dev/gemini-api/docs/pricing).
 Free-tier request content may be used to improve Google's products; use a paid
 tier if that data policy is not appropriate for your deployment.
@@ -124,7 +124,7 @@ Create `api/local.settings.json` for local Azure Functions development:
     "AzureWebJobsStorage": "",
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "GEMINI_API_KEY": "your-key",
-    "GEMINI_MODEL": "gemini-2.5-flash"
+    "GEMINI_MODEL": "gemini-3.6-flash"
   }
 }
 ```
@@ -167,7 +167,7 @@ GEMINI_API_KEY
 GEMINI_MODEL
 ```
 
-`GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`.
+`GEMINI_MODEL` is optional and defaults to `gemini-3.6-flash`.
 
 ## Project Structure
 
