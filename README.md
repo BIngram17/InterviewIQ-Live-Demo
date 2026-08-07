@@ -3,7 +3,7 @@
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Azure_Static_Web_Apps-0ea5e9?style=for-the-badge)](https://wonderful-ocean-0c82eb910.7.azurestaticapps.net)
 [![Next.js](https://img.shields.io/badge/Next.js-16-111827?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![Azure Functions](https://img.shields.io/badge/Azure-Functions-2563eb?style=for-the-badge&logo=microsoftazure)](https://azure.microsoft.com/products/functions)
-[![GitHub Models](https://img.shields.io/badge/AI-GitHub_Models-7c3aed?style=for-the-badge&logo=github)](https://github.com/marketplace/models)
+[![Google AI Studio](https://img.shields.io/badge/AI-Google_AI_Studio-4285f4?style=for-the-badge&logo=google)](https://aistudio.google.com/)
 
 InterviewIQ is a production-deployed AI interview coaching application. It
 analyzes a job description, generates fresh questions calibrated to the role and
@@ -43,7 +43,7 @@ flowchart LR
     U["Browser"]
     UI["Next.js + React static frontend"]
     API["Azure Functions API"]
-    AI["GitHub Models"]
+    AI["Google AI Studio / Gemini API"]
     RUNNER["Sandboxed JavaScript test runner"]
     STORE["Browser localStorage"]
 
@@ -55,7 +55,7 @@ flowchart LR
 ```
 
 The frontend is statically exported by Next.js and hosted through Azure Static
-Web Apps. AI requests are sent to managed Azure Functions so the GitHub Models
+Web Apps. AI requests are sent to managed Azure Functions so the Gemini API
 credential never enters client-side code.
 
 ### API routes
@@ -91,7 +91,7 @@ presented as a guarantee against every possible attack.
 | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, CSS |
 | API | Node.js 22, Azure Functions |
-| AI | GitHub Models, `openai/gpt-4.1-mini` by default |
+| AI | Google AI Studio / Gemini API, `gemini-2.5-flash` by default |
 | Hosting | Azure Static Web Apps |
 | Browser APIs | MediaRecorder, Web Speech, Clipboard, Blob |
 | Security | CSP, iframe sandboxing, input validation, prompt boundaries |
@@ -101,7 +101,12 @@ presented as a guarantee against every possible attack.
 ### Prerequisites
 
 - Node.js 22 or newer
-- A GitHub token with permission to use GitHub Models
+- A Gemini API key from Google AI Studio
+
+`gemini-2.5-flash` is available on the Gemini API free tier, subject to
+[Google's current quotas and pricing](https://ai.google.dev/gemini-api/docs/pricing).
+Free-tier request content may be used to improve Google's products; use a paid
+tier if that data policy is not appropriate for your deployment.
 
 Install dependencies:
 
@@ -118,8 +123,8 @@ Create `api/local.settings.json` for local Azure Functions development:
   "Values": {
     "AzureWebJobsStorage": "",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "GITHUB_MODELS_TOKEN": "your-token",
-    "GITHUB_MODELS_MODEL": "openai/gpt-4.1-mini"
+    "GEMINI_API_KEY": "your-key",
+    "GEMINI_MODEL": "gemini-2.5-flash"
   }
 }
 ```
@@ -158,12 +163,11 @@ npx @azure/static-web-apps-cli deploy out --api-location api --env production
 Configure these Azure Static Web Apps environment variables:
 
 ```text
-GITHUB_MODELS_TOKEN
-GITHUB_MODELS_MODEL
+GEMINI_API_KEY
+GEMINI_MODEL
 ```
 
-`GITHUB_MODELS_MODEL` is optional and defaults to
-`openai/gpt-4.1-mini`.
+`GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`.
 
 ## Project Structure
 
@@ -171,7 +175,7 @@ GITHUB_MODELS_MODEL
 interviewiq-live-demo/
 |-- api/
 |   |-- src/functions/       # Interview, answer, and code feedback endpoints
-|   `-- src/lib/ai.js        # GitHub Models client and API safeguards
+|   `-- src/lib/ai.js        # Gemini API client and API safeguards
 |-- app/
 |   |-- page.tsx             # Interview workflow and client state
 |   |-- globals.css          # Responsive light/dark product interface
@@ -190,7 +194,9 @@ interviewiq-live-demo/
 - Recorded audio remains in the browser and is not uploaded to the API.
 - JavaScript is the only language executed by the built-in test runner.
 - Python and Java receive AI review without server-side execution.
-- AI availability and limits depend on GitHub Models and the configured model.
+- AI availability and limits depend on the Gemini API and the configured model.
+- The public demo's rate limiter is instance-local and does not replace a
+  provider-side budget or quota cap.
 
 ## Related Project
 

@@ -65,6 +65,6 @@ app.http("interview", {
     if (!analysis.summary || analysis.technical.length < 2 || analysis.soft.length < 2 || questions.length < 4) {
       throw new ApiError(502, "The AI response did not contain a complete interview set.");
     }
-    return { analysis, questions, provider: "GitHub Models" };
+    return { analysis, questions, provider: "Google AI Studio" };
   }, "interview"),
 });

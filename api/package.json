@@ -7,6 +7,9 @@
   "engines": {
     "node": "22"
   },
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
     "@azure/functions": "^4.7.2"
   }

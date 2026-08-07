@@ -417,7 +417,6 @@ export default function Home() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const generationVariantRef = useRef(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = isDarkMode ? "dark" : "light";
@@ -552,7 +551,6 @@ export default function Home() {
         ? questions.map((item) => item.question)
         : matchingSession?.questions.map((item) => item.question) ?? [];
     let generated: { questions: InterviewQuestion[]; analysis: RoleAnalysis; containsInstructionLikeText?: boolean };
-    let usedFallback = false;
     try {
       const response = await fetch("/api/interview", {
         method: "POST",
@@ -570,16 +568,9 @@ export default function Home() {
       if (!response.ok) throw new Error(payload?.error || "Live AI is unavailable.");
       generated = payload;
     } catch (error) {
-      generationVariantRef.current = (generationVariantRef.current + 1) % 3;
-      generated = buildInterview(
-        jobTitle,
-        jobDescription,
-        difficulty,
-        interviewType,
-        generationVariantRef.current,
-      );
-      usedFallback = true;
-      setNotice(`${error instanceof Error ? error.message : "Live AI is unavailable."} Showing a locally generated practice set for now.`);
+      setNotice(error instanceof Error ? error.message : "Live AI is unavailable.");
+      setIsStarting(false);
+      return;
     }
     setQuestions(generated.questions);
     setRoleAnalysis(generated.analysis);
@@ -610,7 +601,7 @@ export default function Home() {
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setIsStarting(false);
-    if (!usedFallback) setNotice(`${generated.questions.length} fresh questions generated live with GitHub Models.`);
+    setNotice(`${generated.questions.length} fresh questions generated live with Google AI Studio.`);
     window.setTimeout(
       () => document.querySelector("#questions")?.scrollIntoView({ behavior: "smooth" }),
       100,
@@ -657,7 +648,7 @@ export default function Home() {
         score: payload.score,
         feedback: payload,
       });
-      setNotice("Your answer was reviewed live with GitHub Models.");
+      setNotice("Your answer was reviewed live with Google AI Studio.");
     } catch (error) {
       setFeedback(null);
       setCodeFeedback(null);
@@ -695,7 +686,7 @@ export default function Home() {
       codeFeedback: review,
       codeLanguage: language,
     });
-    setNotice("Your code was reviewed live with GitHub Models.");
+    setNotice("Your code was reviewed live with Google AI Studio.");
     window.setTimeout(
       () => document.querySelector("#feedback")?.scrollIntoView({ behavior: "smooth" }),
       100,
@@ -1178,7 +1169,7 @@ export default function Home() {
                   <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Type your response, or use Record answer for voice practice…" />
                 </label>
                 <button className="primary-button" type="button" onClick={reviewAnswer} disabled={isReviewing}>
-                  {isReviewing ? "Reviewing with GitHub Models…" : "Review answer with AI"}
+                  {isReviewing ? "Reviewing with Google AI Studio…" : "Review answer with AI"}
                 </button>
                 <p className="privacy-note">Voice stays in this browser session and is not uploaded or saved.</p>
                   </>
@@ -1233,7 +1224,7 @@ export default function Home() {
 
         <footer className="demo-footer">
           <strong>InterviewIQ</strong>
-          <span>Live AI interview preparation · React · Azure Functions · GitHub Models</span>
+          <span>Live AI interview preparation · React · Azure Functions · Google AI Studio</span>
           <a href="https://github.com/BIngram17/InterviewIQ-Live-Demo" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
         </footer>
       </main>

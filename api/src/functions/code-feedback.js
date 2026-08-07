@@ -37,6 +37,6 @@ app.http("codeFeedback", {
     if (!result.verdict || !result.strengths.length || !result.improvements.length || !result.suggestedCode) {
       throw new ApiError(502, "The AI response did not contain a complete code review.");
     }
-    return { ...result, provider: "GitHub Models" };
+    return { ...result, provider: "Google AI Studio" };
   }, "code-feedback"),
 });
