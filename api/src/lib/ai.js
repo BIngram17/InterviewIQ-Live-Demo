@@ -11,6 +11,17 @@ export function text(value, maxLength) {
     .slice(0, maxLength);
 }
 
+export function multilineText(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u206F]/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 export function arrayOfText(value, maxItems = 6, maxLength = 180) {
   if (!Array.isArray(value)) return [];
   return value
@@ -61,7 +72,7 @@ export function allowRequest(request, scope) {
 
 export async function readBody(request) {
   const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 24_000) throw new ApiError(413, "Request is too large.");
+  if (contentLength > 32_000) throw new ApiError(413, "Request is too large.");
   try {
     return await request.json();
   } catch {

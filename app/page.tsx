@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import JobUrlImporter, { ImportedJob } from "./components/JobUrlImporter";
 
 type CodingTest = { input: unknown; expected: unknown };
 type CodingChallenge = {
@@ -423,6 +425,8 @@ export default function Home() {
   }, [isDarkMode]);
 
   useEffect(() => {
+    // Reset the transient copy/download status when a new feedback object arrives.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFeedbackActionStatus("");
   }, [feedback]);
 
@@ -432,6 +436,8 @@ export default function Home() {
       if (savedHistory) {
         const parsedHistory = JSON.parse(savedHistory);
         if (Array.isArray(parsedHistory)) {
+          // Hydrate browser-only session data after the client mounts.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setAnswerHistory(
             parsedHistory
               .filter((attempt) => attempt && typeof attempt.sessionId === "string")
@@ -456,6 +462,8 @@ export default function Home() {
       const saved = window.localStorage.getItem(interviewSessionsStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Hydrate browser-only saved sessions after the client mounts.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (Array.isArray(parsed)) setSavedSessions(parsed.slice(0, 20));
       }
     } catch {
@@ -894,6 +902,14 @@ export default function Home() {
     }
   };
 
+  const applyImportedJob = (job: ImportedJob) => {
+    setJobTitle(job.jobTitle);
+    setCompany(job.company);
+    setDifficulty(job.level);
+    setJobDescription(job.jobDescription);
+    setNotice("Job details imported. Review them, then start interview prep.");
+  };
+
   const downloadFeedback = () => {
     if (!feedback) return;
     const report = buildFeedbackReport(
@@ -981,6 +997,7 @@ export default function Home() {
               Generate realistic interview questions from a job description,
               practice by typing or recording your answers, and get direct AI coaching.
             </p>
+            <div className="hero-actions"><Link className="resume-studio-button" href="/resume/">Open Resume Studio <span>→</span></Link></div>
           </div>
           <div className="hero-card">
             <span className="status-dot" />
@@ -1032,6 +1049,7 @@ export default function Home() {
               <div><p className="section-label">Step 1</p><h2>Build your interview</h2></div>
               <button className="ghost-button" type="button" onClick={resetDemo}>Reset</button>
             </div>
+            <JobUrlImporter onImported={applyImportedJob} />
             <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} /></label>
             <label className="field"><span>Company name</span><input maxLength={100} value={company} onChange={(event) => setCompany(event.target.value)} /></label>
             <div className="field-row">

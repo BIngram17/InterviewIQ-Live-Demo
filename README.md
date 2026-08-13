@@ -8,7 +8,8 @@
 InterviewIQ is a production-deployed AI interview coaching application. It
 analyzes a job description, generates fresh questions calibrated to the role and
 seniority level, evaluates typed or spoken answers, and provides structured,
-actionable coaching.
+actionable coaching. Its Resume Studio also reviews resumes, recommends
+job-specific improvements, and generates grounded cover letters.
 
 **[Launch the live application](https://wonderful-ocean-0c82eb910.7.azurestaticapps.net)**
 
@@ -23,6 +24,8 @@ actionable coaching.
 - Generates six live behavioral, technical, and coding questions from the job
   title, description, interview type, company, and role level
 - Supports internship, entry-level, mid-level, and senior interview calibration
+- Imports public job-posting URLs and uses AI to prefill the title, company,
+  role level, and description
 - Produces fresh question sets when an interview is regenerated
 - Scores answers and returns strengths, improvement areas, coaching notes, and
   an improved response
@@ -35,6 +38,8 @@ actionable coaching.
 - Saves interview sessions and session-scoped answer attempts in browser storage
 - Includes copy and downloadable text feedback reports
 - Provides responsive light and dark themes
+- Includes a dedicated Resume Studio for role-fit reviews, targeted resume
+  changes, ATS keyword guidance, and tailored cover letters
 
 ## Architecture
 
@@ -46,12 +51,14 @@ flowchart LR
     AI["Google AI Studio / Gemini API"]
     RUNNER["Sandboxed JavaScript test runner"]
     STORE["Browser localStorage"]
+    JOB["Public job posting"]
 
     U --> UI
     UI --> API
     API --> AI
     UI --> RUNNER
     UI --> STORE
+    API --> JOB
 ```
 
 The frontend is statically exported by Next.js and hosted through Azure Static
@@ -65,6 +72,8 @@ credential never enters client-side code.
 | `POST /api/interview` | Analyze the role and generate a fresh interview set |
 | `POST /api/feedback` | Score and coach a behavioral or technical answer |
 | `POST /api/code-feedback` | Review JavaScript, Python, or Java code as text |
+| `POST /api/job-import` | Safely fetch a public posting and extract structured job details |
+| `POST /api/resume-tools` | Review resumes, suggest edits, or generate a grounded cover letter |
 
 ## Security Design
 
@@ -81,6 +90,8 @@ Its defensive controls include:
 - Sandboxed JavaScript execution in a dedicated iframe with network access
   disabled
 - Code review prompts that treat submitted source code as inert text
+- Public-job URL validation, redirect revalidation, response-size limits, and
+  local/private network blocking to reduce server-side request forgery risk
 
 These controls reduce prompt-injection and code-execution risk, but they are not
 presented as a guarantee against every possible attack.
@@ -94,7 +105,7 @@ presented as a guarantee against every possible attack.
 | AI | Google AI Studio / Gemini API, `gemini-3.6-flash` by default |
 | Hosting | Azure Static Web Apps |
 | Browser APIs | MediaRecorder, Web Speech, Clipboard, Blob |
-| Security | CSP, iframe sandboxing, input validation, prompt boundaries |
+| Security | CSP, iframe sandboxing, input validation, prompt boundaries, SSRF safeguards |
 
 ## Run Locally
 
@@ -177,6 +188,8 @@ interviewiq-live-demo/
 |   |-- src/functions/       # Interview, answer, and code feedback endpoints
 |   `-- src/lib/ai.js        # Gemini API client and API safeguards
 |-- app/
+|   |-- components/          # Shared job-posting URL importer
+|   |-- resume/              # Resume review and cover-letter workspace
 |   |-- page.tsx             # Interview workflow and client state
 |   |-- globals.css          # Responsive light/dark product interface
 |   `-- layout.tsx           # Metadata and social preview configuration
@@ -197,6 +210,8 @@ interviewiq-live-demo/
 - AI availability and limits depend on the Gemini API and the configured model.
 - The public demo's rate limiter is instance-local and does not replace a
   provider-side budget or quota cap.
+- Job URL import works only for public HTML pages; sites that block automated
+  access require the user to paste the job description manually.
 
 ## Related Project
 
