@@ -204,12 +204,17 @@ Configure these Azure Static Web Apps environment variables:
 GEMINI_API_KEY
 GEMINI_MODEL
 GEMINI_FALLBACK_MODEL
+GEMINI_ATTEMPT_TIMEOUT_MS
+GEMINI_TOTAL_TIMEOUT_MS
 ```
 
 `GEMINI_MODEL` is optional and defaults to `gemini-3.6-flash`.
 `GEMINI_FALLBACK_MODEL` is optional and defaults to
 `gemini-3.5-flash-lite`. Transient provider failures are retried with bounded
-exponential backoff before the fallback model is used.
+exponential backoff. A stalled primary request is aborted independently so the
+fallback model receives a fresh request budget instead of inheriting an expired
+signal. The optional attempt and total timeout settings default to 17 and 50
+seconds respectively.
 
 ## Project Structure
 

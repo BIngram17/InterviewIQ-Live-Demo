@@ -153,7 +153,7 @@ app.http("jobImport", {
         "Infer level only from the posting: internship, entry, mid, or senior. Preserve the actual responsibilities, requirements, and qualifications in a clean plain-text description. " +
         'Return JSON with shape {"jobTitle":string,"company":string,"level":"internship"|"entry"|"mid"|"senior","jobDescription":string}.',
       data: { sourceUrl: finalUrl, pageText },
-      maxTokens: 1800,
+      maxTokens: 1400,
     });
     const result = {
       jobTitle: text(raw?.jobTitle, 100),

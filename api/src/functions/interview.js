@@ -48,7 +48,7 @@ app.http("interview", {
         "A coding question must be language-neutral and solvable in JavaScript, Python, or Java in 20 minutes. " +
         'Return JSON with shape {"analysis":{"summary":string,"technical":string[],"soft":string[],"topics":string[]},"questions":[{"category":string,"question":string,"why":string,"coding"?:{"title":string,"prompt":string,"examples":string}}]}.',
       data: { jobTitle, company, jobDescription, level, interviewType, previousQuestions, generationNonce: crypto.randomUUID() },
-      maxTokens: 2200,
+      maxTokens: 1800,
     });
 
     const analysis = {

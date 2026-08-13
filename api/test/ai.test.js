@@ -3,6 +3,8 @@ import test from "node:test";
 
 process.env.GEMINI_API_KEY = "test-key";
 process.env.GEMINI_RETRY_BASE_MS = "1";
+process.env.GEMINI_ATTEMPT_TIMEOUT_MS = "100";
+process.env.GEMINI_TOTAL_TIMEOUT_MS = "500";
 
 const { ApiError, completeJson } = await import("../src/lib/ai.js");
 const originalFetch = globalThis.fetch;
@@ -37,7 +39,7 @@ test("completeJson sends a structured Gemini request and parses its response", a
   assert.match(body.contents[0].parts[0].text, /"answer":"Example"/);
 });
 
-test("completeJson retries a transient outage and falls back to Flash-Lite", async () => {
+test("completeJson retries a transient outage using the fallback before retrying primary", async () => {
   const urls = [];
   globalThis.fetch = async (url) => {
     urls.push(url);
@@ -52,8 +54,29 @@ test("completeJson retries a transient outage and falls back to Flash-Lite", asy
   assert.deepEqual(result, { recovered: true });
   assert.equal(urls.length, 3);
   assert.match(urls[0], /gemini-3\.6-flash:generateContent$/);
-  assert.match(urls[1], /gemini-3\.6-flash:generateContent$/);
-  assert.match(urls[2], /gemini-3\.5-flash-lite:generateContent$/);
+  assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
+  assert.match(urls[2], /gemini-3\.6-flash:generateContent$/);
+});
+
+test("completeJson gives the fallback a fresh timeout after a stalled primary", async () => {
+  const urls = [];
+  globalThis.fetch = (url, options) => {
+    urls.push(url);
+    if (urls.length === 1) {
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+    }
+    return Promise.resolve(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"fallback":true}' }] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  };
+
+  const result = await completeJson({ system: "Return JSON.", data: {} });
+
+  assert.deepEqual(result, { fallback: true });
+  assert.equal(urls.length, 2);
+  assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
 });
 
 test("completeJson translates Gemini rate limits into a safe public error", async () => {
@@ -76,7 +99,7 @@ test("completeJson returns a clear 503 after exhausting transient retries", asyn
     completeJson({ system: "Return JSON.", data: {} }),
     (error) => error instanceof ApiError && error.status === 503 && /after retrying/.test(error.message),
   );
-  assert.equal(calls, 4);
+  assert.equal(calls, 3);
 });
 
 test("completeJson rejects incomplete Gemini responses", async () => {

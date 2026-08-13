@@ -22,7 +22,7 @@ app.http("codeFeedback", {
         "Assess correctness against the challenge, edge cases, complexity, readability, and language conventions. Be explicit when correctness cannot be proven without execution. " +
         'Return JSON with shape {"score":number 1-10,"verdict":string,"strengths":string[],"improvements":string[],"complexity":string,"suggestedCode":string}.',
       data: { language, challenge, code, testSummary },
-      maxTokens: 1800,
+      maxTokens: 1500,
     });
 
     const result = {

@@ -2,6 +2,8 @@ const API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models";
 const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite";
 const RETRY_BASE_MS = Math.max(1, Number(process.env.GEMINI_RETRY_BASE_MS) || 650);
+const ATTEMPT_TIMEOUT_MS = Math.max(100, Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS) || 17_000);
+const TOTAL_TIMEOUT_MS = Math.max(ATTEMPT_TIMEOUT_MS, Number(process.env.GEMINI_TOTAL_TIMEOUT_MS) || 50_000);
 const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
 const rateBuckets = new Map();
 
@@ -136,32 +138,44 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
     throw new ApiError(503, "Live AI is not configured yet.");
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 32_000);
+  const deadline = Date.now() + TOTAL_TIMEOUT_MS;
   let response;
+  let sawTimeout = false;
   const modelAttempts = PRIMARY_MODEL === FALLBACK_MODEL
-    ? [PRIMARY_MODEL, PRIMARY_MODEL, PRIMARY_MODEL]
-    : [PRIMARY_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, FALLBACK_MODEL];
-  try {
-    for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {
-      try {
-        response = await requestGemini({ apiKey, model: modelAttempts[attempt], system, data, maxTokens, signal: controller.signal });
-      } catch (error) {
-        if (error?.name === "AbortError") throw error;
-        if (attempt === modelAttempts.length - 1) throw error;
-        await wait(retryDelay(null, attempt));
-        continue;
-      }
-      if (response.ok) break;
-      if (response.status === 401 || response.status === 403) break;
-      if (!retryableStatuses.has(response.status) || attempt === modelAttempts.length - 1) break;
-      await wait(retryDelay(response, attempt));
+    ? [PRIMARY_MODEL, PRIMARY_MODEL]
+    : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
+
+  for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    const controller = new AbortController();
+    const attemptTimeout = setTimeout(() => controller.abort(), Math.min(ATTEMPT_TIMEOUT_MS, remainingMs));
+    try {
+      response = await requestGemini({ apiKey, model: modelAttempts[attempt], system, data, maxTokens, signal: controller.signal });
+    } catch (error) {
+      if (error?.name === "AbortError") sawTimeout = true;
+      else if (attempt === modelAttempts.length - 1) throw new ApiError(502, "The AI service could not be reached.");
+      response = undefined;
+    } finally {
+      clearTimeout(attemptTimeout);
     }
-  } catch (error) {
-    if (error?.name === "AbortError") throw new ApiError(504, "AI request timed out. Please try again.");
-    throw new ApiError(502, "The AI service could not be reached.");
-  } finally {
-    clearTimeout(timeout);
+
+    if (response?.ok) break;
+    if (response && (response.status === 401 || response.status === 403 || !retryableStatuses.has(response.status))) break;
+    if (attempt === modelAttempts.length - 1) break;
+
+    // A stalled request already spent its latency budget, so try the fallback
+    // immediately. Provider errors receive a short, bounded backoff.
+    if (!sawTimeout) {
+      const delay = retryDelay(response, attempt);
+      if (Date.now() + delay < deadline) await wait(delay);
+    }
+  }
+
+  if (!response) {
+    throw new ApiError(sawTimeout ? 504 : 502, sawTimeout
+      ? "The AI models took too long to respond. Please try again."
+      : "The AI service could not be reached.");
   }
 
   if (!response.ok) {
