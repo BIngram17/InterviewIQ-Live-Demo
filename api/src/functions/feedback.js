@@ -21,7 +21,6 @@ app.http("feedback", {
         'Return JSON with shape {"score":number 1-10,"strengths":string[],"improvements":string[],"coaching":string,"improvedAnswer":string}.',
       data: { jobTitle, level, question, answer },
       maxTokens: 1500,
-      temperature: 0.45,
     });
 
     const result = {

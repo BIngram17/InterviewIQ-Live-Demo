@@ -28,7 +28,6 @@ app.http("resumeTools", {
         "Optimize for clear human reading and ATS relevance while preserving the candidate's authentic voice. " + instruction,
       data: { action, resume, jobTitle, company, level, jobDescription },
       maxTokens: action === "cover-letter" ? 1700 : 3000,
-      temperature: action === "cover-letter" ? 0.45 : 0.25,
     });
 
     if (action === "review") {

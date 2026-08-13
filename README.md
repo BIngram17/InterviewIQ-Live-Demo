@@ -180,9 +180,13 @@ Configure these Azure Static Web Apps environment variables:
 ```text
 GEMINI_API_KEY
 GEMINI_MODEL
+GEMINI_FALLBACK_MODEL
 ```
 
 `GEMINI_MODEL` is optional and defaults to `gemini-3.6-flash`.
+`GEMINI_FALLBACK_MODEL` is optional and defaults to
+`gemini-3.5-flash-lite`. Transient provider failures are retried with bounded
+exponential backoff before the fallback model is used.
 
 ## Project Structure
 

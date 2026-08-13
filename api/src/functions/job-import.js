@@ -154,7 +154,6 @@ app.http("jobImport", {
         'Return JSON with shape {"jobTitle":string,"company":string,"level":"internship"|"entry"|"mid"|"senior","jobDescription":string}.',
       data: { sourceUrl: finalUrl, pageText },
       maxTokens: 1800,
-      temperature: 0.15,
     });
     const result = {
       jobTitle: text(raw?.jobTitle, 100),
