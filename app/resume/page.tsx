@@ -19,6 +19,22 @@ type ResumeResult = {
   notes?: string[];
 };
 
+type SavedApplication = {
+  id: string;
+  updatedAt: number;
+  jobTitle: string;
+  company: string;
+  level: string;
+  jobDescription: string;
+  resume: string;
+  resumeFileName: string;
+  reviewResult: ResumeResult | null;
+  coverResult: ResumeResult | null;
+};
+
+const applicationStorageKey = "interviewiq-saved-applications-v1";
+const maxSavedApplications = 12;
+
 export default function ResumeStudio() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [resume, setResume] = useState("");
@@ -35,9 +51,121 @@ export default function ResumeStudio() {
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [resumeStatus, setResumeStatus] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
+  const [savedApplications, setSavedApplications] = useState<SavedApplication[]>([]);
+  const [activeApplicationId, setActiveApplicationId] = useState("");
+  const [isMemoryLoaded, setIsMemoryLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { document.documentElement.dataset.theme = isDarkMode ? "dark" : "light"; }, [isDarkMode]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(applicationStorageKey);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        const valid = parsed
+          .filter((item) => item && typeof item.id === "string" && typeof item.updatedAt === "number")
+          .map((item) => ({
+            id: item.id,
+            updatedAt: item.updatedAt,
+            jobTitle: typeof item.jobTitle === "string" ? item.jobTitle : "",
+            company: typeof item.company === "string" ? item.company : "",
+            level: ["internship", "entry", "mid", "senior"].includes(item.level) ? item.level : "entry",
+            jobDescription: typeof item.jobDescription === "string" ? item.jobDescription : "",
+            resume: typeof item.resume === "string" ? item.resume : "",
+            resumeFileName: typeof item.resumeFileName === "string" ? item.resumeFileName : "",
+            reviewResult: item.reviewResult && typeof item.reviewResult === "object" ? item.reviewResult : null,
+            coverResult: item.coverResult && typeof item.coverResult === "object" ? item.coverResult : null,
+          }))
+          .slice(0, maxSavedApplications) as SavedApplication[];
+        // Restore the latest device-local application when Resume Studio opens.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSavedApplications(valid);
+        if (valid[0]) {
+          const latest = valid[0];
+          setActiveApplicationId(latest.id);
+          setJobTitle(latest.jobTitle || "");
+          setCompany(latest.company || "");
+          setLevel(latest.level || "entry");
+          setJobDescription(latest.jobDescription || "");
+          setResume(latest.resume || "");
+          setResumeFileName(latest.resumeFileName || "");
+          setReviewResult(latest.reviewResult || null);
+          setCoverResult(latest.coverResult || null);
+        } else {
+          setActiveApplicationId(crypto.randomUUID());
+        }
+      } else {
+        setActiveApplicationId(crypto.randomUUID());
+      }
+    } catch {
+      window.localStorage.removeItem(applicationStorageKey);
+      setActiveApplicationId(crypto.randomUUID());
+    } finally {
+      setIsMemoryLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMemoryLoaded) return;
+    window.localStorage.setItem(applicationStorageKey, JSON.stringify(savedApplications.slice(0, maxSavedApplications)));
+  }, [isMemoryLoaded, savedApplications]);
+
+  useEffect(() => {
+    if (!isMemoryLoaded || !activeApplicationId) return;
+    const hasApplication = Boolean(jobTitle.trim() || company.trim() || jobDescription.trim() || resume.trim() || reviewResult || coverResult);
+    if (!hasApplication) return;
+    const timeout = window.setTimeout(() => {
+      const saved: SavedApplication = {
+        id: activeApplicationId,
+        updatedAt: Date.now(),
+        jobTitle,
+        company,
+        level,
+        jobDescription,
+        resume,
+        resumeFileName,
+        reviewResult,
+        coverResult,
+      };
+      setSavedApplications((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, maxSavedApplications));
+    }, 600);
+    return () => window.clearTimeout(timeout);
+  }, [activeApplicationId, company, coverResult, isMemoryLoaded, jobDescription, jobTitle, level, resume, resumeFileName, reviewResult]);
+
+  const loadApplication = (application: SavedApplication) => {
+    setActiveApplicationId(application.id);
+    setJobTitle(application.jobTitle);
+    setCompany(application.company);
+    setLevel(application.level);
+    setJobDescription(application.jobDescription);
+    setResume(application.resume);
+    setResumeFileName(application.resumeFileName);
+    setReviewResult(application.reviewResult);
+    setCoverResult(application.coverResult);
+    setResumeStatus("Saved application restored from this browser.");
+    setCoverStatus("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const startNewApplication = () => {
+    setActiveApplicationId(crypto.randomUUID());
+    setJobTitle("");
+    setCompany("");
+    setLevel("entry");
+    setJobDescription("");
+    setResume("");
+    setResumeFileName("");
+    setReviewResult(null);
+    setCoverResult(null);
+    setResumeStatus("");
+    setCoverStatus("");
+  };
+
+  const deleteApplication = (applicationId: string) => {
+    setSavedApplications((current) => current.filter((item) => item.id !== applicationId));
+    if (applicationId === activeApplicationId) startNewApplication();
+  };
 
   const applyImportedJob = (job: ImportedJob) => {
     setJobTitle(job.jobTitle);
@@ -150,6 +278,26 @@ export default function ResumeStudio() {
           </div>
         </article>
 
+        <section className="panel application-memory-panel">
+          <div className="panel-header">
+            <div><p className="section-label">Application memory</p><h2>Saved applications</h2><p className="memory-note">Resume drafts and AI results are saved only in this browser.</p></div>
+            <div className="memory-header-actions"><span className="count-pill">{savedApplications.length} saved</span><button className="ghost-button" type="button" onClick={startNewApplication}>Start new</button></div>
+          </div>
+          {savedApplications.length === 0 ? (
+            <div className="memory-empty"><strong>No saved applications yet</strong><span>Your first draft will autosave as you add a job or resume.</span></div>
+          ) : (
+            <div className="application-memory-list">
+              {savedApplications.map((application) => (
+                <article className={`application-memory-card ${application.id === activeApplicationId ? "active-memory-card" : ""}`} key={application.id}>
+                  <div className="memory-card-heading"><div><h3>{application.jobTitle || "Untitled application"}</h3><p>{application.company || "Company not specified"}</p></div><span>{formatMemoryDate(application.updatedAt)}</span></div>
+                  <div className="memory-card-tags"><span>{formatRoleLevel(application.level)}</span>{application.reviewResult && <span>Review saved</span>}{application.coverResult && <span>Cover letter saved</span>}</div>
+                  <div className="memory-card-actions"><button className="small-action-button" type="button" onClick={() => loadApplication(application)}>Restore</button><button className="small-action-button danger-action" type="button" onClick={() => deleteApplication(application.id)} aria-label={`Delete ${application.jobTitle || "untitled"} saved application`}>Delete</button></div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="resume-studio-columns">
           <div className="resume-review-column">
             <article className="panel studio-panel resume-source-panel">
@@ -175,7 +323,7 @@ export default function ResumeStudio() {
               {resumeFileName && <div className="uploaded-file-chip"><span><strong>{resumeFileName}</strong><small>Text extracted successfully</small></span><button type="button" onClick={() => { setResume(""); setResumeFileName(""); setReviewResult(null); setCoverResult(null); setResumeStatus(""); }}>Remove</button></div>}
               <div className="paste-divider"><span>or paste and edit</span></div>
               <label className="field"><span>Resume text</span><textarea className="resume-textarea" value={resume} maxLength={14000} onChange={(event) => { setResume(event.target.value); setResumeFileName(""); setReviewResult(null); setCoverResult(null); }} placeholder="Paste the complete text of your resume here." /></label>
-              <p className="privacy-note">Your file is converted to text for this request and is not permanently stored.</p>
+              <p className="privacy-note">The original file is not stored. Extracted text autosaves only in this browser and is sent to AI when you run a tool.</p>
               <button className="primary-button review-resume-button" type="button" disabled={isReviewing || isExtracting} onClick={() => runTool("review")}>{isReviewing ? "Reviewing resume..." : "Review resume + targeted changes"}</button>
               {resumeStatus && <p className="studio-status" role="status">{resumeStatus}</p>}
             </article>
@@ -221,3 +369,5 @@ function CoverLetterView({ result, onCopy }: { result: ResumeResult; onCopy: () 
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }
 function ResultList({ title, items = [] }: { title: string; items?: string[] }) { return <section className="feedback-block"><h3>{title}</h3><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></section>; }
 function KeywordList({ items = [] }: { items?: string[] }) { return items.length ? <section className="keyword-section"><h3>ATS keywords to verify</h3><div className="analysis-chip-list">{items.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div></section> : null; }
+function formatMemoryDate(value: number) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
+function formatRoleLevel(value: string) { return value === "internship" ? "Internship" : value === "entry" ? "Entry level" : value === "mid" ? "Mid level" : "Senior level"; }

@@ -36,6 +36,8 @@ job-specific improvements, and generates grounded cover letters.
   sends the result to the AI coding coach
 - Reviews Python and Java solutions as inert text without executing them
 - Saves interview sessions and session-scoped answer attempts in browser storage
+- Autosaves application drafts, extracted resume text, reviews, targeted edits,
+  and cover letters in device-local browser storage with restore/delete controls
 - Includes copy and downloadable text feedback reports
 - Provides responsive light and dark themes
 - Includes a dedicated Resume Studio for role-fit reviews, targeted resume
@@ -210,7 +212,8 @@ interviewiq-live-demo/
 
 ## Demo Data and Limitations
 
-- Interview sessions are stored in the current browser, not a hosted database.
+- Interview and application sessions are stored in the current browser, not a
+  hosted database or user account.
 - The public demo does not require an account.
 - Recorded audio remains in the browser and is not uploaded to the API.
 - JavaScript is the only language executed by the built-in test runner.
