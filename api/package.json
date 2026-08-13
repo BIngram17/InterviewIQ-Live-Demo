@@ -11,6 +11,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@azure/functions": "^4.7.2"
+    "@azure/functions": "^4.7.2",
+    "mammoth": "^1.12.1",
+    "pdf-parse": "^2.4.5"
   }
 }

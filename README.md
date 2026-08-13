@@ -40,6 +40,8 @@ job-specific improvements, and generates grounded cover letters.
 - Provides responsive light and dark themes
 - Includes a dedicated Resume Studio for role-fit reviews, targeted resume
   changes, ATS keyword guidance, and tailored cover letters
+- Accepts drag-and-drop PDF, DOCX, and TXT resumes and extracts their text
+  without permanently storing the uploaded file
 
 ## Architecture
 
@@ -73,6 +75,7 @@ credential never enters client-side code.
 | `POST /api/feedback` | Score and coach a behavioral or technical answer |
 | `POST /api/code-feedback` | Review JavaScript, Python, or Java code as text |
 | `POST /api/job-import` | Safely fetch a public posting and extract structured job details |
+| `POST /api/resume-extract` | Extract bounded plain text from an uploaded PDF, DOCX, or TXT resume |
 | `POST /api/resume-tools` | Review resumes, suggest edits, or generate a grounded cover letter |
 
 ## Security Design
@@ -92,6 +95,7 @@ Its defensive controls include:
 - Code review prompts that treat submitted source code as inert text
 - Public-job URL validation, redirect revalidation, response-size limits, and
   local/private network blocking to reduce server-side request forgery risk
+- Resume file type, signature, and 5 MB size validation before text extraction
 
 These controls reduce prompt-injection and code-execution risk, but they are not
 presented as a guarantee against every possible attack.
@@ -185,7 +189,7 @@ GEMINI_MODEL
 ```text
 interviewiq-live-demo/
 |-- api/
-|   |-- src/functions/       # Interview, answer, and code feedback endpoints
+|   |-- src/functions/       # Interview, resume, answer, and code endpoints
 |   `-- src/lib/ai.js        # Gemini API client and API safeguards
 |-- app/
 |   |-- components/          # Shared job-posting URL importer
@@ -212,6 +216,8 @@ interviewiq-live-demo/
   provider-side budget or quota cap.
 - Job URL import works only for public HTML pages; sites that block automated
   access require the user to paste the job description manually.
+- Image-only or heavily formatted PDFs may not contain enough readable text;
+  DOCX or pasted text is the recommended fallback.
 
 ## Related Project
 
