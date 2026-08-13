@@ -21,6 +21,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and test
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run lint
+          npm run test:e2e
+
       - name: Build and deploy frontend and API
         uses: Azure/static-web-apps-deploy@v1
         with:

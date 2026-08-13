@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import JobUrlImporter, { ImportedJob } from "./components/JobUrlImporter";
+import ProductSwitcher from "./components/ProductSwitcher";
 
 type CodingTest = { input: unknown; expected: unknown };
 type CodingChallenge = {
@@ -963,6 +964,8 @@ export default function Home() {
             <p className="brand-subtitle">AI interview coach</p>
           </div>
         </div>
+
+        <ProductSwitcher active="interview" />
 
         <nav className="sidebar-nav" aria-label="InterviewIQ navigation">
           <a className={`nav-item ${activeSection === "practice" ? "active" : ""}`} href="#practice" onClick={() => setActiveSection("practice")}><span className="nav-icon">01</span>Practice</a>

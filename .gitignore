@@ -14,6 +14,12 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
+
+# framework-generated agent guidance
+/AGENTS.md
+/CLAUDE.md
 
 # next.js
 /.next/

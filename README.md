@@ -13,7 +13,7 @@ job-specific improvements, and generates grounded cover letters.
 
 **[Launch the live application](https://wonderful-ocean-0c82eb910.7.azurestaticapps.net)**
 
-![InterviewIQ dashboard and voice practice preview](public/og-v2.png)
+![InterviewIQ Resume Studio with readiness tracking, tailored review, and cover-letter versions](public/resume-studio.png)
 
 > This repository contains the public, serverless portfolio demo. The separate
 > [InterviewIQ Lab](https://github.com/BIngram17/InterviewIQ) contains the
@@ -36,32 +36,44 @@ job-specific improvements, and generates grounded cover letters.
   sends the result to the AI coding coach
 - Reviews Python and Java solutions as inert text without executing them
 - Saves interview sessions and session-scoped answer attempts in browser storage
-- Autosaves application drafts, extracted resume text, reviews, targeted edits,
-  and cover letters in device-local browser storage with restore/delete controls
+- Tracks application readiness and autosaves named drafts, extracted resume
+  text, reviews, targeted edits, and versioned cover letters in device-local
+  storage with restore, rename, confirmed delete, and undo controls
 - Includes copy and downloadable text feedback reports
 - Provides responsive light and dark themes
 - Includes a dedicated Resume Studio for role-fit reviews, targeted resume
-  changes, ATS keyword guidance, and tailored cover letters
+  changes linked to job requirements, ATS keyword guidance, and grounded cover
+  letters with professional, concise, and conversational tones
+- Distinguishes safe rewrites from recommendations that require candidate input,
+  with per-change and bulk-copy controls
+- Exports cover letters as TXT or DOCX and preserves up to ten generated versions
+- Provides a persistent Interview Prep / Resume Studio switcher on desktop and mobile
 - Accepts drag-and-drop PDF, DOCX, and TXT resumes and extracts their text
   without permanently storing the uploaded file
+- Runs Playwright end-to-end tests for the tailored application flow, local
+  memory, and mobile navigation before Azure deployment
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U["Browser"]
-    UI["Next.js + React static frontend"]
+    U["Browser"] --> UI["Next.js + React static frontend"]
+    UI --> INTERVIEW["Interview Prep"]
+    UI --> RESUME["Resume Studio"]
     API["Azure Functions API"]
     AI["Google AI Studio / Gemini API"]
     RUNNER["Sandboxed JavaScript test runner"]
-    STORE["Browser localStorage"]
+    STORE["Browser session memory"]
     JOB["Public job posting"]
+    FILES["PDF / DOCX / TXT"]
 
-    U --> UI
-    UI --> API
+    INTERVIEW --> API
+    INTERVIEW --> RUNNER
+    INTERVIEW --> STORE
+    RESUME --> API
+    RESUME --> STORE
+    FILES --> API
     API --> AI
-    UI --> RUNNER
-    UI --> STORE
     API --> JOB
 ```
 
@@ -106,12 +118,13 @@ presented as a guarantee against every possible attack.
 
 | Layer | Technologies |
 | --- | --- |
-| Frontend | Next.js 16, React 19, TypeScript, CSS |
+| Frontend | Next.js 16, React 19, TypeScript, CSS, DOCX generation |
 | API | Node.js 22, Azure Functions |
 | AI | Google AI Studio / Gemini API, `gemini-3.6-flash` by default |
 | Hosting | Azure Static Web Apps |
 | Browser APIs | MediaRecorder, Web Speech, Clipboard, Blob |
 | Security | CSP, iframe sandboxing, input validation, prompt boundaries, SSRF safeguards |
+| Testing and CI/CD | Playwright, ESLint, GitHub Actions |
 
 ## Run Locally
 
@@ -152,6 +165,14 @@ For frontend-only development:
 
 ```bash
 npm run dev
+```
+
+Run linting and the desktop/mobile browser suite:
+
+```bash
+npm run lint
+npx playwright install chromium
+npm run test:e2e
 ```
 
 For the complete static frontend and managed API:
@@ -198,7 +219,7 @@ interviewiq-live-demo/
 |   |-- src/functions/       # Interview, resume, answer, and code endpoints
 |   `-- src/lib/ai.js        # Gemini API client and API safeguards
 |-- app/
-|   |-- components/          # Shared job-posting URL importer
+|   |-- components/          # Job importer and persistent product switcher
 |   |-- resume/              # Resume review and cover-letter workspace
 |   |-- page.tsx             # Interview workflow and client state
 |   |-- globals.css          # Responsive light/dark product interface
@@ -206,7 +227,10 @@ interviewiq-live-demo/
 |-- public/
 |   |-- code-runner.html     # Restricted JavaScript runner frame
 |   |-- code-runner.js
+|   |-- resume-studio.png    # Browser-tested product screenshot
 |   `-- staticwebapp.config.json
+|-- e2e/                     # Playwright desktop and mobile flows
+|-- playwright.config.ts
 `-- README.md
 ```
 
