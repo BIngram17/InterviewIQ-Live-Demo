@@ -133,8 +133,22 @@ export default function ResumeStudio() {
       <main className="studio-shell">
         <section className="studio-hero">
           <div><p className="eyebrow">AI application toolkit</p><h1>Build a stronger application in one workspace.</h1><p>Upload your resume for a complete review and targeted changes, then tailor a cover letter to the same job posting.</p></div>
-          <div className="studio-feature-grid" aria-label="Resume Studio capabilities"><span>PDF, DOCX & TXT</span><span>Review + targeted edits</span><span>Tailored cover letters</span></div>
         </section>
+
+        <article className="panel studio-panel target-job-panel">
+          <div className="panel-header"><div><p className="section-label">Shared target</p><h2>Add the job once for both tools</h2></div><span className="target-job-badge">Used for review + cover letter</span></div>
+          <div className="target-job-layout">
+            <JobUrlImporter onImported={applyImportedJob} compact />
+            <div className="target-job-fields">
+              <div className="target-job-meta">
+                <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => { setJobTitle(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
+                <label className="field"><span>Company</span><input maxLength={100} value={company} onChange={(event) => { setCompany(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
+                <label className="field"><span>Role level</span><select value={level} onChange={(event) => { setLevel(event.target.value); setReviewResult(null); setCoverResult(null); }}><option value="internship">Internship</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior level</option></select></label>
+              </div>
+              <label className="field"><span>Job description</span><textarea className="job-description-textarea" value={jobDescription} maxLength={6000} onChange={(event) => { setJobDescription(event.target.value); setReviewResult(null); setCoverResult(null); }} placeholder="Import a posting URL or paste the complete job description here." /></label>
+            </div>
+          </div>
+        </article>
 
         <section className="resume-studio-columns">
           <div className="resume-review-column">
@@ -173,15 +187,8 @@ export default function ResumeStudio() {
           </div>
 
           <div className="cover-letter-column">
-            <article className="panel studio-panel job-cover-panel">
-              <div className="panel-header"><div><p className="section-label">Cover letter generator</p><h2>Add the target job</h2></div></div>
-              <JobUrlImporter onImported={applyImportedJob} compact />
-              <div className="field-row studio-field-row">
-                <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => { setJobTitle(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
-                <label className="field"><span>Company</span><input maxLength={100} value={company} onChange={(event) => { setCompany(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
-              </div>
-              <label className="field"><span>Role level</span><select value={level} onChange={(event) => { setLevel(event.target.value); setReviewResult(null); setCoverResult(null); }}><option value="internship">Internship</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior level</option></select></label>
-              <label className="field"><span>Job description</span><textarea className="job-description-textarea" value={jobDescription} maxLength={6000} onChange={(event) => { setJobDescription(event.target.value); setReviewResult(null); setCoverResult(null); }} placeholder="Import a posting URL or paste the complete job description here." /></label>
+            <article className="panel studio-panel cover-letter-action-panel">
+              <div className="panel-header"><div><p className="section-label">Cover letter generator</p><h2>Create your tailored letter</h2></div></div>
               <button className="primary-button" type="button" disabled={isGeneratingCover || isExtracting} onClick={() => runTool("cover-letter")}>{isGeneratingCover ? "Writing cover letter..." : "Generate tailored cover letter"}</button>
               {coverStatus && <p className="studio-status" role="status">{coverStatus}</p>}
             </article>
