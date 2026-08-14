@@ -214,7 +214,8 @@ GEMINI_TOTAL_TIMEOUT_MS
 exponential backoff. A stalled primary request is aborted independently so the
 fallback model receives a fresh request budget instead of inheriting an expired
 signal. The optional attempt and total timeout settings default to 17 and 50
-seconds respectively.
+seconds respectively. Gemini thinking is set to `low` for these latency-sensitive
+structured JSON operations so reasoning does not consume the response budget.
 
 ## Project Structure
 

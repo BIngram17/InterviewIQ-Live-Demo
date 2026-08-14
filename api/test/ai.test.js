@@ -34,6 +34,7 @@ test("completeJson sends a structured Gemini request and parses its response", a
   const body = JSON.parse(request.options.body);
   assert.equal(body.generationConfig.responseMimeType, "application/json");
   assert.equal(body.generationConfig.maxOutputTokens, 300);
+  assert.equal(body.generationConfig.thinkingConfig.thinkingLevel, "low");
   assert.equal(body.generationConfig.temperature, undefined);
   assert.match(body.system_instruction.parts[0].text, /untrusted data/);
   assert.match(body.contents[0].parts[0].text, /"answer":"Example"/);

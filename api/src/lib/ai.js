@@ -127,6 +127,9 @@ async function requestGemini({ apiKey, model, system, data, maxTokens, signal })
       generationConfig: {
         maxOutputTokens: maxTokens,
         responseMimeType: "application/json",
+        thinkingConfig: {
+          thinkingLevel: "low",
+        },
       },
     }),
   });
