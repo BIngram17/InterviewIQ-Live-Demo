@@ -32,14 +32,22 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await expect(page.getByRole("button", { name: "Download DOCX" })).toBeVisible();
   await expect(page.getByText(/Saved in this browser/)).toBeVisible({ timeout: 3000 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: "public/resume-studio.png", fullPage: true });
+  if (process.env.UPDATE_README_SCREENSHOT === "1") {
+    await page.screenshot({ path: "public/resume-studio.png", fullPage: true });
+  }
 });
 
 test("mobile layout prioritizes the target job and collapses saved applications", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/resume/");
+  await page.getByRole("button", { name: "Light" }).click();
+  await expect(page.getByRole("button", { name: "Dark" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "InterviewIQ tools" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Saved applications" })).toBeVisible();
   await expect(page.getByRole("button", { name: "View saved" })).toBeVisible();
   await expect(page.locator(".application-memory-list")).toHaveCount(0);
+  const jobUrl = page.getByLabel("Job posting URL");
+  await jobUrl.fill("https://example.com/jobs/software-developer");
+  await page.getByRole("button", { name: "Start new" }).click();
+  await expect(jobUrl).toHaveValue("");
 });

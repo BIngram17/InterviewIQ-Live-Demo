@@ -332,7 +332,7 @@ export default function ResumeStudio() {
         <article className={`panel studio-panel target-job-panel ${isTargetCollapsed ? "target-collapsed" : ""}`}>
           <div className="panel-header"><div><p className="section-label">Shared target</p><h2>{isTargetCollapsed ? `${jobTitle}${company ? ` at ${company}` : ""}` : "Add the job once for both tools"}</h2>{isTargetCollapsed && <p className="memory-note">{formatRoleLevel(level)} · Job details ready</p>}</div><button className="ghost-button" type="button" onClick={() => setIsTargetCollapsed((value) => !value)}>{isTargetCollapsed ? "Edit target" : "Collapse"}</button></div>
           {!isTargetCollapsed && <div className="target-job-layout">
-            <JobUrlImporter onImported={applyImportedJob} compact />
+            <JobUrlImporter key={activeApplicationId || "loading"} onImported={applyImportedJob} compact />
             <div className="target-job-fields">
               <div className="target-job-meta">
                 <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => { setJobTitle(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
