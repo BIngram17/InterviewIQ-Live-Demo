@@ -11,6 +11,11 @@ export function safeChangeKind(value) {
   return value === "rewrite" ? "rewrite" : "needs-info";
 }
 
+export function countWords(value) {
+  const content = String(value || "").trim();
+  return content ? content.split(/\s+/).length : 0;
+}
+
 export function mislabelsCompletedPastDate(change, resume, now = new Date()) {
   const issue = String(change?.currentIssue || "");
   if (!/future|upcoming|not yet occurred/i.test(issue)) return false;

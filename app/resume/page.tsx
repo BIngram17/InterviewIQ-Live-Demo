@@ -297,8 +297,20 @@ export default function ResumeStudio() {
     if (format === "txt") {
       downloadBlob(new Blob([coverResult.coverLetter], { type: "text/plain;charset=utf-8" }), `${base}.txt`);
     } else {
-      const { Document, Packer, Paragraph } = await import("docx");
-      const document = new Document({ sections: [{ children: coverResult.coverLetter.split(/\n+/).map((line) => new Paragraph({ text: line })) }] });
+      const { Document, Packer, Paragraph, TextRun } = await import("docx");
+      const paragraphs = coverResult.coverLetter
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
+        .filter(Boolean);
+      const document = new Document({
+        sections: [{
+          properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+          children: paragraphs.map((paragraph) => new Paragraph({
+            children: [new TextRun({ text: paragraph, font: "Times New Roman", size: 24 })],
+            spacing: { line: 240, after: 160 },
+          })),
+        }],
+      });
       downloadBlob(await Packer.toBlob(document), `${base}.docx`);
     }
     setCoverStatus(`Downloaded ${format.toUpperCase()} cover letter.`);
@@ -439,7 +451,8 @@ function ReviewResultView({ result, onCopy }: { result: ResumeResult; onCopy: (v
 }
 
 function CoverLetterView({ result, onCopy, onDownload }: { result: ResumeResult; onCopy: () => void; onDownload: (format: "txt" | "docx") => void }) {
-  return <div className="resume-result-content"><div className="result-actions"><button className="small-action-button" type="button" onClick={onCopy}>Copy</button><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
+  const wordCount = result.coverLetter?.trim().split(/\s+/).filter(Boolean).length || 0;
+  return <div className="resume-result-content"><div className="result-actions"><span className="count-pill">{wordCount} words</span><button className="small-action-button" type="button" onClick={onCopy}>Copy</button><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
 }
 
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }

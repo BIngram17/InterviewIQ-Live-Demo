@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentDateIso, mislabelsCompletedPastDate, safeChangeKind } from "../src/lib/resume-review.js";
+import { countWords, currentDateIso, mislabelsCompletedPastDate, safeChangeKind } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -24,4 +24,9 @@ test("unknown change classifications default to needs-info", () => {
   assert.equal(safeChangeKind("rewrite"), "rewrite");
   assert.equal(safeChangeKind("unexpected-value"), "needs-info");
   assert.equal(safeChangeKind(undefined), "needs-info");
+});
+
+test("counts cover-letter words across paragraphs and extra whitespace", () => {
+  assert.equal(countWords("First paragraph.\n\nSecond   paragraph."), 4);
+  assert.equal(countWords("   "), 0);
 });

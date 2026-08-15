@@ -9,7 +9,8 @@ InterviewIQ is a production-deployed AI interview coaching application. It
 analyzes a job description, generates fresh questions calibrated to the role and
 seniority level, evaluates typed or spoken answers, and provides structured,
 actionable coaching. Its Resume Studio also reviews resumes, recommends
-job-specific improvements, and generates grounded cover letters.
+job-specific improvements, and generates grounded, one-page cover letters with
+Times New Roman 12-point DOCX export.
 
 **[Launch the live application](https://wonderful-ocean-0c82eb910.7.azurestaticapps.net)**
 
