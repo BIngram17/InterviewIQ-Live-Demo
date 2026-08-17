@@ -9,8 +9,9 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await page.route("**/api/resume-tools", async (route) => {
     const body = route.request().postDataJSON();
     await route.fulfill({ json: body.action === "review" ? {
-      action: "review", headline: "Strong foundation", score: 84, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"],
-      changes: [{ section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved release reliability by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info" }]
+      action: "review", headline: "Strong foundation", score: 84, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"],
+      scoreBreakdown: [{ category: "Required qualifications", score: 25, maxScore: 30, evidence: "React and Node.js are present.", improvement: "Add testing evidence." }],
+      changes: [{ section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved release reliability by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info", priority: "high", scoreImpact: 5 }]
     } : { action: "cover-letter", headline: "Northstar cover letter", coverLetter: "Dear Hiring Team,\n\nI am excited to apply for the Software Developer role. My experience building React applications and Node.js APIs aligns with your needs.\n\nSincerely,\nJordan Lee", notes: ["Verify the hiring manager name."] } });
   });
 
@@ -25,6 +26,9 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await page.locator('input[type="file"]').setInputFiles({ name: "resume.txt", mimeType: "text/plain", buffer: Buffer.from(resumeText) });
   await page.getByRole("button", { name: /Review resume/ }).click();
   await expect(page.getByText("Needs your input")).toBeVisible();
+  await expect(page.getByText("Potential fit", { exact: true })).toBeVisible();
+  await expect(page.getByText("93%")).toBeVisible();
+  await expect(page.getByText("Potential lift:")).toBeVisible();
   await expect(page.getByText(/improve continuous delivery/)).toBeVisible();
   await page.getByLabel("Tone").selectOption("concise");
   await page.getByRole("button", { name: /Generate tailored cover letter/ }).click();

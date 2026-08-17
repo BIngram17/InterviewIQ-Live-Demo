@@ -5,16 +5,19 @@ import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import ProductSwitcher from "../components/ProductSwitcher";
 import JobUrlImporter, { ImportedJob } from "../components/JobUrlImporter";
 
-type Change = { section: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info" };
+type Change = { section: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
+type ScoreBreakdown = { category: string; score: number; maxScore: number; evidence: string; improvement: string };
 type ResumeResult = {
   action: "review" | "cover-letter";
   headline?: string;
   score?: number;
+  projectedScore?: number;
   summary?: string;
   strengths?: string[];
   gaps?: string[];
   atsKeywords?: string[];
   nextSteps?: string[];
+  scoreBreakdown?: ScoreBreakdown[];
   changes?: Change[];
   coverLetter?: string;
   notes?: string[];
@@ -38,7 +41,7 @@ type CoverTone = "standard" | "concise" | "conversational";
 type CoverVersion = { id: string; createdAt: number; tone: CoverTone; result: ResumeResult };
 
 const applicationStorageKey = "interviewiq-saved-applications-v1";
-const maxSavedApplications = 12;
+const maxSavedApplications = 24;
 
 export default function ResumeStudio() {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -63,7 +66,7 @@ export default function ResumeStudio() {
   const [isMemoryLoaded, setIsMemoryLoaded] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isTargetCollapsed, setIsTargetCollapsed] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "full">("idle");
   const [lastSavedAt, setLastSavedAt] = useState(0);
   const [renamingId, setRenamingId] = useState("");
   const [renameValue, setRenameValue] = useState("");
@@ -127,7 +130,11 @@ export default function ResumeStudio() {
 
   useEffect(() => {
     if (!isMemoryLoaded) return;
-    window.localStorage.setItem(applicationStorageKey, JSON.stringify(savedApplications.slice(0, maxSavedApplications)));
+    try {
+      window.localStorage.setItem(applicationStorageKey, JSON.stringify(savedApplications.slice(0, maxSavedApplications)));
+    } catch {
+      window.setTimeout(() => setSaveState("full"), 0);
+    }
   }, [isMemoryLoaded, savedApplications]);
 
   useEffect(() => {
@@ -364,8 +371,8 @@ export default function ResumeStudio() {
 
         <section className="panel application-memory-panel">
           <div className="panel-header">
-            <div><p className="section-label">Application memory</p><h2>Saved applications</h2><p className="memory-note">{saveState === "saving" ? "Saving…" : saveState === "saved" ? `Saved in this browser · ${formatRelativeTime(lastSavedAt)}` : "Drafts and AI results save only in this browser."}</p></div>
-            <div className="memory-header-actions"><span className="count-pill">{savedApplications.length} saved</span><button className="ghost-button" type="button" onClick={() => setIsMemoryOpen((value) => !value)}>{isMemoryOpen ? "Hide saved" : "View saved"}</button><button className="ghost-button" type="button" onClick={startNewApplication}>Start new</button></div>
+            <div><p className="section-label">Application memory</p><h2>Saved applications</h2><p className="memory-note">{saveState === "saving" ? "Saving…" : saveState === "saved" ? `Saved in this browser · ${formatRelativeTime(lastSavedAt)}` : saveState === "full" ? "Browser storage is full. Delete an older application to continue saving." : `Drafts and AI results save only in this browser. Up to ${maxSavedApplications}; the oldest is replaced at the limit.`}</p></div>
+            <div className="memory-header-actions"><span className="count-pill">{savedApplications.length} / {maxSavedApplications} saved</span><button className="ghost-button" type="button" onClick={() => setIsMemoryOpen((value) => !value)}>{isMemoryOpen ? "Hide saved" : "View saved"}</button><button className="ghost-button" type="button" onClick={startNewApplication}>Start new</button></div>
           </div>
           {deletedApplication && <div className="undo-banner"><span>Deleted {deletedApplication.name || deletedApplication.jobTitle || "saved application"}.</span><button type="button" onClick={() => { setSavedApplications((current) => [deletedApplication, ...current].slice(0, maxSavedApplications)); setDeletedApplication(null); }}>Undo</button></div>}
           {isMemoryOpen && (savedApplications.length === 0 ? (
@@ -443,10 +450,12 @@ export default function ResumeStudio() {
 function ReviewResultView({ result, onCopy }: { result: ResumeResult; onCopy: (value: string, message: string) => void }) {
   return <div className="resume-result-content">
     {result.summary && <p className="result-summary">{result.summary}</p>}
+    {result.score && result.projectedScore && <section className="score-path-card"><div><span>Current fit</span><strong>{result.score}%</strong></div><span className="score-path-arrow">→</span><div><span>Potential fit</span><strong>{result.projectedScore}%</strong></div><p>Potential fit assumes every safe rewrite is applied and every requested detail is verified. It is an estimate, not an ATS guarantee.</p></section>}
+    {!!result.scoreBreakdown?.length && <section className="score-breakdown"><div><p className="section-label">Scoring rubric</p><h3>Where the points come from</h3></div>{result.scoreBreakdown.map((item) => <article key={item.category}><div><strong>{item.category}</strong><span>{item.score}/{item.maxScore}</span></div><p>{item.evidence}</p>{item.improvement && <small><strong>Best improvement:</strong> {item.improvement}</small>}</article>)}</section>}
     <KeywordList items={result.atsKeywords} />
     <div className="result-two-column"><ResultList title="What already works" items={result.strengths} /><ResultList title="Gaps to address" items={result.gaps} /></div>
     <ResultList title="Highest-impact next steps" items={result.nextSteps} />
-    {!!result.changes?.length && <section className="targeted-changes-section"><div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><button className="small-action-button" type="button" onClick={() => onCopy(result.changes!.map((change) => `${change.section}: ${change.suggestion}\nExample: ${change.example}`).join("\n\n"), "All targeted changes copied.")}>Copy all</button></div>{result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}><div className="change-card-header"><span>{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your input" : "Safe rewrite"}</span></div>{change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}{change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>{change.example && <div><strong>Example</strong><p>{change.example}</p><button className="small-action-button" type="button" onClick={() => onCopy(change.example, `${change.section} example copied.`)}>Copy example</button></div>}</section>)}</section>}
+    {!!result.changes?.length && <section className="targeted-changes-section"><div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><button className="small-action-button" type="button" onClick={() => onCopy(result.changes!.map((change) => `${change.section}: ${change.suggestion}\nExample: ${change.example}`).join("\n\n"), "All targeted changes copied.")}>Copy all</button></div>{result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}><div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your input" : "Safe rewrite"}</span></div>{change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}{change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}{change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>{change.example && <div><strong>Example</strong><p>{change.example}</p><button className="small-action-button" type="button" onClick={() => onCopy(change.example, `${change.section} example copied.`)}>Copy example</button></div>}</section>)}</section>}
   </div>;
 }
 
@@ -461,6 +470,7 @@ function KeywordList({ items = [] }: { items?: string[] }) { return items.length
 function formatMemoryDate(value: number) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
 function formatRoleLevel(value: string) { return value === "internship" ? "Internship" : value === "entry" ? "Entry level" : value === "mid" ? "Mid level" : "Senior level"; }
 function formatTone(value: CoverTone) { return value === "concise" ? "Concise" : value === "conversational" ? "Conversational" : "Professional"; }
+function capitalize(value: string) { return value.charAt(0).toUpperCase() + value.slice(1); }
 function formatRelativeTime(value: number) { const seconds = Math.max(0, Math.round((Date.now() - value) / 1000)); return seconds < 10 ? "just now" : seconds < 60 ? `${seconds}s ago` : `${Math.round(seconds / 60)}m ago`; }
 function safeFileName(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cover-letter"; }
 function downloadBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url); }
