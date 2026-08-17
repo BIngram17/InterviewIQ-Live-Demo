@@ -23,7 +23,9 @@ app.http("resumeTools", {
 
     const coverVoice = tone === "concise" ? "direct, economical professional" : tone === "conversational" ? "warm conversational" : "professional";
     const coverTarget = tone === "concise" ? "350-425" : "425-500";
-    const coverMinimum = tone === "concise" ? 325 : 375;
+    // Concise is a style choice, so keep its target substantial without rejecting
+    // the longer of two otherwise complete drafts when Gemini lands below target.
+    const coverMinimum = tone === "concise" ? 200 : 375;
 
     const instruction = action === "review"
       ? 'Assess job fit and include targeted resume changes in the same response. Compare every date to currentDate: dates before currentDate are historical, not future. Never change "conferred," "graduated," "completed," or "awarded" to "expected." Do not recommend changing an already-completed degree to an expected degree. When education status or any factual status is ambiguous, use kind "needs-info" and ask the candidate to confirm it; never guess. Every change must cite one relevant requirement from the supplied job description. Use kind "rewrite" only when the example uses existing resume facts; use "needs-info" when the candidate must provide a missing fact or metric, and make the example a fill-in template rather than fabricating. Return JSON with shape {"headline":string,"score":number 1-100,"summary":string,"strengths":string[],"gaps":string[],"atsKeywords":string[],"nextSteps":string[],"changes":[{"section":string,"currentIssue":string,"suggestion":string,"example":string,"relatedRequirement":string,"kind":"rewrite"|"needs-info"}]}.'
