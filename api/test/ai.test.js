@@ -40,6 +40,34 @@ test("completeJson sends a structured Gemini request and parses its response", a
   assert.match(body.contents[0].parts[0].text, /"answer":"Example"/);
 });
 
+test("completeJson repairs common JSON formatting mistakes", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text: '```json\n{"coverLetter":"First line\nSecond line","notes":["Review",],}\n```' }] } }],
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  const result = await completeJson({ system: "Return JSON.", data: {} });
+
+  assert.deepEqual(result, { coverLetter: "First line\nSecond line", notes: ["Review"] });
+});
+
+test("completeJson retries malformed model output with the fallback", async () => {
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(url);
+    const content = urls.length === 1 ? '{"coverLetter":' : '{"coverLetter":"Recovered"}';
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: content }] } }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const result = await completeJson({ system: "Return JSON.", data: {} });
+
+  assert.deepEqual(result, { coverLetter: "Recovered" });
+  assert.equal(urls.length, 2);
+  assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
+});
+
 test("completeJson retries a transient outage using the fallback before retrying primary", async () => {
   const urls = [];
   globalThis.fetch = async (url) => {

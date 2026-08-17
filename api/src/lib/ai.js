@@ -135,6 +135,62 @@ async function requestGemini({ apiKey, model, system, data, maxTokens, signal })
   });
 }
 
+function normalizeJsonText(value) {
+  const content = String(value || "").trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .replace(/^\uFEFF/, "");
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  const candidate = start >= 0 && end > start ? content.slice(start, end + 1) : content;
+  let normalized = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < candidate.length; index += 1) {
+    const character = candidate[index];
+    if (inString) {
+      if (escaped) {
+        normalized += character;
+        escaped = false;
+      } else if (character === "\\") {
+        normalized += character;
+        escaped = true;
+      } else if (character === '"') {
+        normalized += character;
+        inString = false;
+      } else if (character === "\n") normalized += "\\n";
+      else if (character === "\r") normalized += "\\r";
+      else if (character === "\t") normalized += "\\t";
+      else normalized += character;
+      continue;
+    }
+
+    if (character === '"') {
+      normalized += character;
+      inString = true;
+      continue;
+    }
+    if (character === ",") {
+      let nextIndex = index + 1;
+      while (/\s/.test(candidate[nextIndex] || "")) nextIndex += 1;
+      if (candidate[nextIndex] === "}" || candidate[nextIndex] === "]") continue;
+    }
+    normalized += character;
+  }
+  return normalized;
+}
+
+async function parseGeminiJson(response) {
+  const payload = await response.json();
+  const content = payload?.candidates?.[0]?.content?.parts
+    ?.map((part) => part?.text)
+    .filter((part) => typeof part === "string")
+    .join("");
+  if (typeof content !== "string" || !content.trim()) throw new SyntaxError("Incomplete AI content");
+  return JSON.parse(normalizeJsonText(content));
+}
+
 export async function completeJson({ system, data, maxTokens = 1800 }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -144,6 +200,7 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
   const deadline = Date.now() + TOTAL_TIMEOUT_MS;
   let response;
   let sawTimeout = false;
+  let sawInvalidContent = false;
   const modelAttempts = PRIMARY_MODEL === FALLBACK_MODEL
     ? [PRIMARY_MODEL, PRIMARY_MODEL]
     : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
@@ -163,7 +220,14 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
       clearTimeout(attemptTimeout);
     }
 
-    if (response?.ok) break;
+    if (response?.ok) {
+      try {
+        return await parseGeminiJson(response);
+      } catch {
+        sawInvalidContent = true;
+        response = undefined;
+      }
+    }
     if (response && (response.status === 401 || response.status === 403 || !retryableStatuses.has(response.status))) break;
     if (attempt === modelAttempts.length - 1) break;
 
@@ -176,6 +240,9 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
   }
 
   if (!response) {
+    if (sawInvalidContent && !sawTimeout) {
+      throw new ApiError(502, "The AI response was incomplete after retrying. Please try again.");
+    }
     throw new ApiError(sawTimeout ? 504 : 502, sawTimeout
       ? "The AI models took too long to respond. Please try again."
       : "The AI service could not be reached.");
@@ -195,24 +262,7 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
     throw new ApiError(502, `The AI provider could not complete the request (HTTP ${response.status}).`);
   }
 
-  const payload = await response.json();
-  const content = payload?.candidates?.[0]?.content?.parts
-    ?.map((part) => part?.text)
-    .filter((part) => typeof part === "string")
-    .join("");
-  if (typeof content !== "string") throw new ApiError(502, "The AI response was incomplete.");
-
-  try {
-    return JSON.parse(content);
-  } catch {
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) throw new ApiError(502, "The AI response was not valid JSON.");
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      throw new ApiError(502, "The AI response was not valid JSON.");
-    }
-  }
+  throw new ApiError(502, "The AI response was incomplete after retrying. Please try again.");
 }
 
 export function withApi(handler, scope) {
