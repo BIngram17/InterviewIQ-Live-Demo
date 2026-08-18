@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import JobUrlImporter, { ImportedJob } from "./components/JobUrlImporter";
 import ProductSwitcher from "./components/ProductSwitcher";
+import { applyCodeEditorKey } from "./lib/code-editor";
 
 type CodingTest = { input: unknown; expected: unknown };
 type CodingChallenge = {
@@ -1322,6 +1323,25 @@ function CodingPractice({
     onReset();
   };
 
+  const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!["Tab", "Enter", "}", "]", ")"].includes(event.key)) return;
+    const target = event.currentTarget;
+    const edit = applyCodeEditorKey({
+      value: code,
+      selectionStart: target.selectionStart,
+      selectionEnd: target.selectionEnd,
+      key: event.key,
+      shiftKey: event.shiftKey,
+      language,
+    });
+    if (!edit) return;
+    event.preventDefault();
+    if (edit.value.length > 12000) return;
+    setCode(edit.value);
+    onReset();
+    window.requestAnimationFrame(() => target.setSelectionRange(edit.selectionStart, edit.selectionEnd));
+  };
+
   const runTests = () => {
     if (language !== "javascript" || !tests.length || !iframeRef.current?.contentWindow) return;
     const runId = crypto.randomUUID();
@@ -1397,18 +1417,21 @@ function CodingPractice({
       </div>
       <div className="editor-toolbar">
         <span>{languageLabel} practice editor</span>
+        <small id="coding-editor-help">Tab indents · Shift+Tab outdents · Enter keeps indentation</small>
       </div>
       <label className="sr-only" htmlFor="coding-editor">{languageLabel} solution</label>
       <textarea
         id="coding-editor"
         className="code-editor"
         spellCheck={false}
+        aria-describedby="coding-editor-help"
         value={code}
         maxLength={12000}
         onChange={(event) => {
           setCode(event.target.value);
           onReset();
         }}
+        onKeyDown={handleEditorKeyDown}
       />
       <div className="code-actions">
         {language === "javascript" && tests.length > 0 && (

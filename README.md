@@ -36,6 +36,8 @@ Times New Roman 12-point DOCX export.
 - Runs JavaScript tests inside a restricted browser iframe and automatically
   sends the result to the AI coding coach
 - Reviews Python and Java solutions as inert text without executing them
+- Provides IDE-style coding controls with Tab/Shift+Tab indentation, automatic
+  indentation on Enter, and closing-brace outdent behavior
 - Saves interview sessions and session-scoped answer attempts in browser storage
 - Tracks application readiness and autosaves named drafts, extracted resume
   text, reviews, targeted edits, and versioned cover letters in device-local

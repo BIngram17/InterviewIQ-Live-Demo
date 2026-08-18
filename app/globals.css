@@ -230,6 +230,7 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .language-tabs button:hover { color:var(--text-main); background:rgba(124,58,237,.1); }
 .language-tabs button.active { color:white; background:linear-gradient(135deg,var(--brand-purple),var(--brand-blue)); box-shadow:0 8px 18px rgba(79,70,229,.18); }
 .editor-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text-soft); font-size:.8rem; font-weight:850; }
+.editor-toolbar small { color:var(--text-muted); font-size:.72rem; font-weight:750; text-align:right; }
 .code-editor { min-height:300px; border-radius:18px; color:#e2e8f0; background:#070d1b; font-family:"SFMono-Regular",Consolas,monospace; font-size:.86rem; line-height:1.65; tab-size:2; }
 .code-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)) auto; gap:10px; }
 .code-actions .ghost-button { padding:0 18px; }
