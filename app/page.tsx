@@ -399,6 +399,7 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [feedbackReady, setFeedbackReady] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const [feedbackError, setFeedbackError] = useState("");
   const [feedbackActionStatus, setFeedbackActionStatus] = useState("");
   const [codeFeedback, setCodeFeedback] = useState<CodeFeedback | null>(null);
   const [codeFeedbackLanguage, setCodeFeedbackLanguage] = useState<CodeLanguage>("javascript");
@@ -608,6 +609,7 @@ export default function Home() {
     setSelectedQuestionIndex(0);
     setFeedbackReady(false);
     setFeedback(null);
+    setFeedbackError("");
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setIsStarting(false);
@@ -623,6 +625,7 @@ export default function Home() {
     setAnswer("");
     setFeedbackReady(false);
     setFeedback(null);
+    setFeedbackError("");
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setNotice("");
@@ -635,7 +638,13 @@ export default function Home() {
     const submittedAnswer = answer.trim().length < 20 ? sampleAnswer : answer;
     if (submittedAnswer !== answer) setAnswer(submittedAnswer);
     setIsReviewing(true);
+    setFeedbackError("");
+    setFeedbackReady(false);
     setNotice("");
+    window.setTimeout(
+      () => document.querySelector("#feedback")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      100,
+    );
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
@@ -647,9 +656,11 @@ export default function Home() {
           answer: submittedAnswer,
         }),
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "Live AI feedback is unavailable.");
+      if (!payload) throw new Error("The AI feedback response could not be read. Please try again.");
       setFeedback(payload);
+      setFeedbackError("");
       setCodeFeedback(null);
       setFeedbackReady(true);
       recordAttempt({
@@ -663,7 +674,8 @@ export default function Home() {
       setFeedback(null);
       setCodeFeedback(null);
       setFeedbackReady(false);
-      setNotice(error instanceof Error ? error.message : "Live AI feedback is unavailable.");
+      setFeedbackError(error instanceof Error ? error.message : "Live AI feedback is unavailable.");
+      setNotice("");
       setIsReviewing(false);
       return;
     }
@@ -678,6 +690,7 @@ export default function Home() {
     setIsReviewingCode(true);
     setFeedbackReady(false);
     setFeedback(null);
+    setFeedbackError("");
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setNotice("Tests finished. The AI coach is reviewing your code…");
@@ -720,6 +733,7 @@ export default function Home() {
   const loadAttempt = (attempt: AnswerAttempt) => {
     setAnswer(attempt.response);
     setFeedback(attempt.feedback ?? null);
+    setFeedbackError("");
     setCodeFeedback(attempt.codeFeedback ?? null);
     if (attempt.codeLanguage) setCodeFeedbackLanguage(attempt.codeLanguage);
     setFeedbackReady(true);
@@ -745,6 +759,7 @@ export default function Home() {
     setAnswer("");
     setFeedbackReady(false);
     setFeedback(null);
+    setFeedbackError("");
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setNotice(`Loaded your ${session.title} interview session.`);
@@ -762,6 +777,7 @@ export default function Home() {
       setAnswer("");
       setFeedbackReady(false);
       setFeedback(null);
+      setFeedbackError("");
       setCodeFeedback(null);
       setActiveAttemptId(null);
     }
@@ -781,6 +797,7 @@ export default function Home() {
     setAnswer("");
     setFeedbackReady(false);
     setFeedback(null);
+    setFeedbackError("");
     setCodeFeedback(null);
     setActiveAttemptId(null);
     setActiveSessionId(null);
@@ -1205,7 +1222,21 @@ export default function Home() {
               <div><p className="section-label">{codeFeedback ? "AI coding coach" : "AI coaching"}</p><h2>Answer feedback</h2></div>
               {feedbackReady && <div className="score-badge"><strong>{score?.toFixed(1)}</strong><span>out of 10</span></div>}
             </div>
-            {!feedbackReady ? (
+            {isReviewing ? (
+              <EmptyState
+                icon="AI"
+                title="Reviewing your answer…"
+                text="The AI coach is scoring your response and preparing specific feedback. This can take a few moments on the free demo tier."
+              />
+            ) : feedbackError ? (
+              <div className="feedback-request-error" role="alert">
+                <div>
+                  <h3>Feedback wasn’t completed</h3>
+                  <p>{feedbackError}</p>
+                </div>
+                <button className="primary-button" type="button" onClick={reviewAnswer}>Try AI feedback again</button>
+              </div>
+            ) : !feedbackReady ? (
               <EmptyState
                 icon="AI"
                 title={isReviewingCode ? "Reviewing your code…" : "Your coaching report will appear here"}

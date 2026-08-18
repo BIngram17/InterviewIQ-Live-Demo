@@ -191,7 +191,7 @@ async function parseGeminiJson(response) {
   return JSON.parse(normalizeJsonText(content));
 }
 
-export async function completeJson({ system, data, maxTokens = 1800 }) {
+export async function completeJson({ system, data, maxTokens = 1800, validate }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ApiError(503, "Live AI is not configured yet.");
@@ -222,7 +222,11 @@ export async function completeJson({ system, data, maxTokens = 1800 }) {
 
     if (response?.ok) {
       try {
-        return await parseGeminiJson(response);
+        const parsed = await parseGeminiJson(response);
+        if (typeof validate === "function" && !validate(parsed)) {
+          throw new SyntaxError("Incomplete AI response shape");
+        }
+        return parsed;
       } catch {
         sawInvalidContent = true;
         response = undefined;

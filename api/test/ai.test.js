@@ -68,6 +68,30 @@ test("completeJson retries malformed model output with the fallback", async () =
   assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
 });
 
+test("completeJson retries valid JSON that fails response-shape validation", async () => {
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(url);
+    const content = urls.length === 1
+      ? '{"score":8,"strengths":[]}'
+      : '{"score":8,"strengths":["Specific example"]}';
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: content }] } }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const result = await completeJson({
+    system: "Return feedback.",
+    data: {},
+    validate: (value) => Array.isArray(value?.strengths) && value.strengths.length > 0,
+  });
+
+  assert.deepEqual(result, { score: 8, strengths: ["Specific example"] });
+  assert.equal(urls.length, 2);
+  assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
+});
+
 test("completeJson retries a transient outage using the fallback before retrying primary", async () => {
   const urls = [];
   globalThis.fetch = async (url) => {

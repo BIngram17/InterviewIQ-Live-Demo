@@ -21,6 +21,17 @@ app.http("feedback", {
         'Return JSON with shape {"score":number 1-10,"strengths":string[],"improvements":string[],"coaching":string,"improvedAnswer":string}.',
       data: { jobTitle, level, question, answer },
       maxTokens: 1200,
+      validate: (value) => (
+        Number.isFinite(Number(value?.score))
+        && Array.isArray(value?.strengths)
+        && value.strengths.some((item) => typeof item === "string" && item.trim())
+        && Array.isArray(value?.improvements)
+        && value.improvements.some((item) => typeof item === "string" && item.trim())
+        && typeof value?.coaching === "string"
+        && Boolean(value.coaching.trim())
+        && typeof value?.improvedAnswer === "string"
+        && Boolean(value.improvedAnswer.trim())
+      ),
     });
 
     const result = {
