@@ -38,6 +38,7 @@ const recentTitlesKey = "interviewiq-coding-practice-titles-v1";
 const savedChallengesKey = "interviewiq-coding-practice-history-v1";
 const maxSavedChallenges = 24;
 const languages: CodeLanguage[] = ["javascript", "python", "java", "csharp", "rust"];
+const executionValueTypes: ExecutionValueType[] = ["string", "integer", "boolean", "string-array", "integer-array", "boolean-array"];
 const stages: Array<{ id: CoachingStage | "review"; number: string; title: string; short: string; guidance: string; placeholder: string }> = [
   { id: "understand", number: "01", title: "Understand the problem", short: "Understand", guidance: "Restate the task in your own words. Identify the exact result the function must return before thinking about code.", placeholder: "In my own words, this problem asks me to…\nThe function receives…\nIt should return…" },
   { id: "edge-cases", number: "02", title: "Inputs, constraints, and edge cases", short: "Edge cases", guidance: "List the normal input shape, important constraints, empty or invalid cases, duplicates, ordering, and boundary values.", placeholder: "Inputs and outputs:\nConstraints that affect the solution:\nEdge cases I need to handle:" },
@@ -51,6 +52,64 @@ const stages: Array<{ id: CoachingStage | "review"; number: string; title: strin
 
 function languageLabel(value: CodeLanguage) {
   return value === "javascript" ? "JavaScript" : value === "python" ? "Python" : value === "java" ? "Java" : value === "csharp" ? "C#" : "Rust";
+}
+
+function valueType(value: unknown): ExecutionValueType | "empty-array" | null {
+  if (typeof value === "string") return "string";
+  if (typeof value === "boolean") return "boolean";
+  if (Number.isSafeInteger(value)) return "integer";
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0) return "empty-array";
+  const itemTypes = new Set(value.map((item) => valueType(item)));
+  if (itemTypes.size !== 1) return null;
+  const itemType = [...itemTypes][0];
+  if (itemType === "string" || itemType === "integer" || itemType === "boolean") return `${itemType}-array`;
+  return null;
+}
+
+function inferredType(values: unknown[], existing: unknown): ExecutionValueType | null {
+  if (executionValueTypes.includes(existing as ExecutionValueType)) return existing as ExecutionValueType;
+  const observed = values.map(valueType);
+  if (observed.some((type) => type === null)) return null;
+  const concrete = [...new Set(observed.filter((type): type is ExecutionValueType => type !== "empty-array"))];
+  if (concrete.length !== 1) return concrete.length === 0 ? "integer-array" : null;
+  if (observed.includes("empty-array") && !concrete[0].endsWith("-array")) return null;
+  return concrete[0];
+}
+
+function normalizeChallenge(value: unknown): Challenge | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<Challenge>;
+  if (!candidate.title || !Array.isArray(candidate.tests) || candidate.tests.length === 0) return null;
+  const inputType = inferredType(candidate.tests.map((test) => test?.input), candidate.inputType);
+  const outputType = inferredType(candidate.tests.map((test) => test?.expected), candidate.outputType);
+  if (!inputType || !outputType) return null;
+  return { ...candidate, inputType, outputType } as Challenge;
+}
+
+function normalizeSavedChallenge(value: unknown): SavedCodingChallenge | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<SavedCodingChallenge>;
+  const challenge = normalizeChallenge(candidate.challenge);
+  const id = typeof candidate.id === "string" && candidate.id ? candidate.id : newPracticeId();
+  if (!challenge) return null;
+  return {
+    ...candidate,
+    id,
+    challenge,
+    language: languages.includes(candidate.language as CodeLanguage) ? candidate.language as CodeLanguage : "javascript",
+    difficulty: ["beginner", "intermediate", "advanced"].includes(candidate.difficulty || "") ? candidate.difficulty as Difficulty : "intermediate",
+    topic: candidate.topic || "arrays-strings",
+    roleContext: typeof candidate.roleContext === "string" ? candidate.roleContext : "",
+    activeStep: Number.isInteger(candidate.activeStep) ? candidate.activeStep as number : 0,
+    notes: candidate.notes && typeof candidate.notes === "object" ? candidate.notes : {},
+    coachFeedback: candidate.coachFeedback && typeof candidate.coachFeedback === "object" ? candidate.coachFeedback : {},
+    code: typeof candidate.code === "string" ? candidate.code : starterFor(candidate.language || "javascript", challenge),
+    testResults: Array.isArray(candidate.testResults) ? candidate.testResults : [],
+    finalReview: candidate.finalReview && typeof candidate.finalReview === "object" ? candidate.finalReview : null,
+    failedAttempts: Number.isInteger(candidate.failedAttempts) ? Math.max(0, Math.min(20, candidate.failedAttempts as number)) : 0,
+    savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
+  };
 }
 
 function languageType(language: CodeLanguage, type: ExecutionValueType) {
@@ -138,26 +197,30 @@ export default function CodingPracticePage() {
     try {
       const saved = JSON.parse(window.localStorage.getItem(savedChallengesKey) || "[]");
       if (Array.isArray(saved)) {
+        const normalizedSaved = saved.map(normalizeSavedChallenge).filter((item): item is SavedCodingChallenge => Boolean(item)).slice(0, maxSavedChallenges);
         // Hydrate device-local challenge history after the page mounts.
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setSavedChallenges(saved.filter((item): item is SavedCodingChallenge => Boolean(item?.id && item?.challenge?.title)).slice(0, maxSavedChallenges));
+        setSavedChallenges(normalizedSaved);
+        window.localStorage.setItem(savedChallengesKey, JSON.stringify(normalizedSaved));
       }
       const stored = window.localStorage.getItem(storageKey);
       const parsed = stored ? JSON.parse(stored) : null;
-      if (parsed?.challenge) {
-        setLanguage(languages.includes(parsed.language) ? parsed.language : "javascript");
-        setDifficulty(["beginner", "intermediate", "advanced"].includes(parsed.difficulty) ? parsed.difficulty : "intermediate");
-        setTopic(parsed.topic || "arrays-strings");
-        setRoleContext(typeof parsed.roleContext === "string" ? parsed.roleContext : "");
-        setChallenge(parsed.challenge);
-        setActiveStep(Number.isInteger(parsed.activeStep) ? Math.max(0, Math.min(stages.length - 1, parsed.activeStep)) : 0);
-        setNotes(parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {});
-        setCoachFeedback(parsed.coachFeedback && typeof parsed.coachFeedback === "object" ? parsed.coachFeedback : {});
-        setCode(typeof parsed.code === "string" ? parsed.code : starterFor(parsed.language || "javascript", parsed.challenge));
-        setTestResults(Array.isArray(parsed.testResults) ? parsed.testResults : []);
-        setFinalReview(parsed.finalReview && typeof parsed.finalReview === "object" ? parsed.finalReview : null);
-        setFailedAttempts(Number.isInteger(parsed.failedAttempts) ? Math.max(0, Math.min(20, parsed.failedAttempts)) : 0);
-        setPracticeId(typeof parsed.id === "string" && parsed.id ? parsed.id : newPracticeId());
+      const normalizedActive = normalizeSavedChallenge(parsed);
+      if (normalizedActive) {
+        setLanguage(normalizedActive.language);
+        setDifficulty(normalizedActive.difficulty);
+        setTopic(normalizedActive.topic);
+        setRoleContext(normalizedActive.roleContext);
+        setChallenge(normalizedActive.challenge);
+        setActiveStep(Math.max(0, Math.min(stages.length - 1, normalizedActive.activeStep)));
+        setNotes(normalizedActive.notes);
+        setCoachFeedback(normalizedActive.coachFeedback);
+        setCode(normalizedActive.code);
+        setTestResults(normalizedActive.testResults);
+        setFinalReview(normalizedActive.finalReview);
+        setFailedAttempts(normalizedActive.failedAttempts);
+        setPracticeId(normalizedActive.id);
+        window.localStorage.setItem(storageKey, JSON.stringify(normalizedActive));
       }
     } catch {
       window.localStorage.removeItem(storageKey);

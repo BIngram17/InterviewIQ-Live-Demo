@@ -972,7 +972,10 @@ export default function Home() {
               Generate realistic interview questions from a job description,
               practice by typing or recording your answers, and get direct AI coaching.
             </p>
-            <div className="hero-actions"><Link className="resume-studio-button" href="/resume/">Open Resume Studio <span>→</span></Link></div>
+            <div className="hero-actions">
+              <Link className="coding-practice-button" href="/coding/">Open Coding Practice <span>→</span></Link>
+              <Link className="resume-studio-button" href="/resume/">Open Resume Studio <span>→</span></Link>
+            </div>
           </div>
           <div className="hero-card">
             <span className="status-dot" />
