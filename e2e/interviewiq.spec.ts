@@ -68,7 +68,7 @@ test("mobile layout prioritizes the target job and collapses saved applications"
   await expect(jobUrl).toHaveValue("");
 });
 
-test("Coding Practice supports five languages, free step navigation, and copy confirmation", async ({ page }) => {
+test("Coding Practice gates progression on passing tests and unlocks support after three failures", async ({ page }) => {
   await page.route("**/api/coding-challenge", (route) => route.fulfill({ json: {
     title: "Count unique tags",
     goal: "Practice using a set while preserving a clear input contract.",
@@ -76,6 +76,8 @@ test("Coding Practice supports five languages, free step navigation, and copy co
     examples: ['["api", "ui", "api"] returns 2'],
     constraints: ["The input is an array of strings.", "The input may be empty."],
     concepts: ["sets", "iteration"],
+    inputType: "string-array",
+    outputType: "integer",
     tests: [
       { input: ["api", "ui", "api"], expected: 2 },
       { input: [], expected: 0 },
@@ -85,12 +87,11 @@ test("Coding Practice supports five languages, free step navigation, and copy co
     difficulty: "intermediate",
     topic: "maps-sets",
   } }));
-  await page.route("**/api/coding-solution", (route) => route.fulfill({ json: {
-    approach: "Use a set because it retains one copy of each tag.",
-    pseudocode: "create a set from input\nreturn the set size",
-    code: "function solution(input) { return new Set(input).size; }",
-    complexity: "O(n) expected time and O(n) space.",
-    pitfalls: ["Do not count duplicate tags more than once."],
+  await page.route("**/api/coding-coach", (route) => route.fulfill({ json: {
+    assessment: "The function always returns zero, so every non-empty case fails.",
+    whatWorks: ["The required solution function is present."],
+    nextActions: ["Create a Set from the input and return its size."],
+    hint: "Which JavaScript collection keeps only unique values?",
   } }));
   await page.route("**/api/code-feedback", (route) => route.fulfill({ json: {
     score: 9,
@@ -114,6 +115,7 @@ test("Coding Practice supports five languages, free step navigation, and copy co
   await page.getByRole("button", { name: "Copy challenge" }).click();
   await expect(page.getByRole("button", { name: /Challenge copied/ })).toBeVisible();
   await page.getByRole("button", { name: /Code/ }).click();
+  await expect(page.getByRole("button", { name: /Testing/ })).toBeDisabled();
   const editor = page.getByLabel("JavaScript solution");
   await editor.fill("function solution(input) {\n  return new Set(input).size;\n}");
   await editor.press("End");
@@ -121,14 +123,17 @@ test("Coding Practice supports five languages, free step navigation, and copy co
   await editor.press("Tab");
   await expect(editor).toHaveValue(/\n  $/);
   await editor.fill("function solution(input) { return 0; }");
-  await page.getByRole("button", { name: /Testing/ }).click();
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    await page.getByRole("button", { name: "Run 3 browser tests" }).click();
-    await expect(page.getByText(`${attempt} of 3 unsuccessful attempts recorded.`, { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Run 3 tests" }).click();
+    if (attempt < 3) await expect(page.getByText(`Unsuccessful runs: ${attempt} of 3`, { exact: false })).toBeVisible();
   }
-  await expect(page.getByText("3 of 3 unsuccessful attempts recorded.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Show complete solution" }).click();
-  await expect(page.getByRole("heading", { name: "Complete solution walkthrough" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Support unlocked after three unsuccessful runs" })).toBeVisible();
+  await page.getByRole("button", { name: "Get AI debugging support" }).click();
+  await expect(page.getByText("Which JavaScript collection keeps only unique values?")).toBeVisible();
+  await editor.fill("function solution(input) { return new Set(input).size; }");
+  await page.getByRole("button", { name: "Run 3 tests" }).click();
+  await expect(page.getByRole("heading", { name: "All tests passed—next step unlocked" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Testing/ })).toBeEnabled();
   await page.getByRole("button", { name: /Review/ }).click();
   await page.getByRole("button", { name: "Get final AI review" }).click();
   await expect(page.getByText("Correct, concise, and appropriate for the constraints.")).toBeVisible();

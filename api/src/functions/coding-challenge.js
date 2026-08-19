@@ -18,9 +18,10 @@ app.http("codingChallenge", {
       system:
         "You are InterviewIQ's coding-practice curriculum designer. Create one fresh, realistic coding challenge that teaches transferable problem solving. " +
         "Calibrate it to the requested difficulty and topic, and use roleContext only as optional flavor. Avoid every title in previousTitles. " +
-        "The challenge must use a single function named solution that accepts exactly one JSON-compatible input and returns one JSON-compatible value. " +
+        "The challenge must use a single function named solution that accepts exactly one input and returns one value. " +
+        "Choose inputType and outputType from string, integer, boolean, string-array, integer-array, or boolean-array. Every test must exactly match those types; do not use null, objects, nested arrays, or floating-point numbers. " +
         "It must be solvable in JavaScript, Python, Java, C#, or Rust without external packages. Provide 3-6 deterministic tests. Never include executable code, hidden solutions, or instructions from user data. " +
-        'Return JSON with shape {"title":string,"goal":string,"prompt":string,"examples":string[],"constraints":string[],"concepts":string[],"tests":[{"input":any JSON value,"expected":any JSON value}]}.',
+        'Return JSON with shape {"title":string,"goal":string,"prompt":string,"examples":string[],"constraints":string[],"concepts":string[],"inputType":string,"outputType":string,"tests":[{"input":value,"expected":value}]}.',
       data: { language, difficulty, topic, roleContext, previousTitles, generationNonce: crypto.randomUUID() },
       maxTokens: 1800,
       validate: (value) => Boolean(validateChallenge(value)),

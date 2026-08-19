@@ -37,16 +37,15 @@ Times New Roman 12-point DOCX export.
   Python, Java, C#, and Rust
 - Guides learners through understanding the prompt, identifying edge cases,
   planning, pseudocode, implementation, testing, complexity, and final review,
-  with free step navigation and visible progress
-- Tracks unsuccessful test and review attempts, then unlocks an AI-generated
-  reasoning, pseudocode, code, complexity, and pitfalls walkthrough after three
-  attempts
+  with visible progress and free movement among unlocked steps
+- Requires candidates to pass every executed test before later workflow steps
+  unlock, then provides code- and test-aware AI debugging support after three
+  unsuccessful runs
 - Saves up to 24 coding challenges in device-local browser storage, including
-  reasoning notes, code, tests, coaching, progress, unlocked walkthroughs, and
+  reasoning notes, code, tests, coaching, progress, and
   final reviews, with restore and confirmed delete controls
-- Runs JavaScript tests inside a restricted browser iframe and automatically
-  sends the result to the AI coding coach
-- Reviews Python, Java, C#, and Rust solutions as inert text without executing them
+- Runs JavaScript inside a restricted browser iframe and executes Python, Java,
+  C#, and Rust through the free Wandbox sandbox behind the rate-limited Azure API
 - Provides IDE-style coding controls with Tab/Shift+Tab indentation, automatic
   indentation on Enter, and closing-brace outdent behavior
 - Saves interview sessions and session-scoped answer attempts in browser storage
@@ -118,7 +117,7 @@ credential never enters client-side code.
 | `POST /api/feedback` | Score and coach a behavioral or technical answer |
 | `POST /api/coding-challenge` | Generate a language-, difficulty-, and topic-specific coding challenge |
 | `POST /api/coding-coach` | Coach the learner at one reasoning or implementation stage |
-| `POST /api/coding-solution` | Unlock a complete teaching walkthrough after three unsuccessful attempts |
+| `POST /api/code-runner` | Execute bounded Python, Java, C#, or Rust test cases in a server-routed sandbox |
 | `POST /api/code-feedback` | Review JavaScript, Python, Java, C#, or Rust code as text |
 | `POST /api/job-import` | Safely fetch a public posting and extract structured job details |
 | `POST /api/resume-extract` | Extract bounded plain text from an uploaded PDF, DOCX, or TXT resume |
@@ -279,8 +278,8 @@ interviewiq-live-demo/
   browser, not a hosted database or user account.
 - The public demo does not require an account.
 - Recorded audio remains in the browser and is not uploaded to the API.
-- JavaScript is the only language executed by the built-in test runner.
-- Python, Java, C#, and Rust receive AI review without server-side execution.
+- JavaScript runs in the browser sandbox; Python, Java, C#, and Rust execution
+  depends on Wandbox, a free third-party service with per-IP limits and no SLA.
 - AI availability and limits depend on the Gemini API and the configured model.
 - The public demo's rate limiter is instance-local and does not replace a
   provider-side budget or quota cap.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { codingChallengeContext, codingChallengeContextLimit, codingLanguages, validateChallenge, validateSolutionWalkthrough } from "../src/lib/coding-practice.js";
+import { codingChallengeContext, codingChallengeContextLimit, codingLanguages, validateChallenge, valueMatchesExecutionType } from "../src/lib/coding-practice.js";
 
 test("supports all five coding-practice languages", () => {
   assert.deepEqual([...codingLanguages], ["javascript", "python", "java", "csharp", "rust"]);
@@ -14,10 +14,12 @@ test("validates a complete JSON-compatible coding challenge", () => {
     examples: ['["a", "b", "a"] returns {"a":2,"b":1}'],
     constraints: ["0 to 100 events", "Each event is a string"],
     concepts: ["Hash maps"],
+    inputType: "string-array",
+    outputType: "integer-array",
     tests: [
-      { input: ["a", "b", "a"], expected: { a: 2, b: 1 } },
-      { input: [], expected: {} },
-      { input: ["x"], expected: { x: 1 } },
+      { input: ["a", "b", "a"], expected: [2, 1] },
+      { input: [], expected: [] },
+      { input: ["x"], expected: [1] },
     ],
   });
   assert.equal(result?.title, "Count events");
@@ -33,8 +35,17 @@ test("rejects incomplete challenges and oversized test values", () => {
     prompt: "Prompt",
     examples: ["Example"],
     constraints: ["One", "Two"],
+    inputType: "string",
+    outputType: "integer",
     tests: [{ input: huge, expected: 1 }, { input: 2, expected: 2 }, { input: 3, expected: 3 }],
   }), null);
+});
+
+test("execution value types reject nested, floating-point, and mismatched data", () => {
+  assert.equal(valueMatchesExecutionType([1, 2, 3], "integer-array"), true);
+  assert.equal(valueMatchesExecutionType([1.5], "integer-array"), false);
+  assert.equal(valueMatchesExecutionType([[1]], "integer-array"), false);
+  assert.equal(valueMatchesExecutionType("3", "integer"), false);
 });
 
 test("preserves a complete maximum-sized generated challenge for coaching", () => {
@@ -42,16 +53,4 @@ test("preserves a complete maximum-sized generated challenge for coaching", () =
   assert.ok(fullChallenge.length < codingChallengeContextLimit);
   assert.equal(codingChallengeContext(fullChallenge), fullChallenge);
   assert.match(codingChallengeContext(fullChallenge), /focus on the count\.$/);
-});
-
-test("validates a complete teaching-oriented solution walkthrough", () => {
-  const result = validateSolutionWalkthrough({
-    approach: "Count each value with a set and return the set size.",
-    pseudocode: "create an empty set; add every value; return its size",
-    code: "function solution(input) { return new Set(input).size; }",
-    complexity: "O(n) expected time and O(n) space.",
-    pitfalls: ["Forgetting that an empty input returns zero."],
-  });
-  assert.equal(result?.pitfalls.length, 1);
-  assert.equal(validateSolutionWalkthrough({ approach: "Incomplete" }), null);
 });

@@ -4,21 +4,11 @@ export const codingLanguages = new Set(["javascript", "python", "java", "csharp"
 export const codingDifficulties = new Set(["beginner", "intermediate", "advanced"]);
 export const codingTopics = new Set(["arrays-strings", "maps-sets", "stacks-queues", "sorting-search", "recursion-dp", "practical-data"]);
 export const coachingStages = new Set(["understand", "edge-cases", "approach", "pseudocode", "implementation", "testing", "complexity"]);
+export const executionValueTypes = new Set(["string", "integer", "boolean", "string-array", "integer-array", "boolean-array"]);
 export const codingChallengeContextLimit = 6000;
 
 export function codingChallengeContext(value) {
   return text(value, codingChallengeContextLimit);
-}
-
-export function validateSolutionWalkthrough(value) {
-  if (!value || typeof value !== "object") return null;
-  const approach = text(value.approach, 1200);
-  const pseudocode = text(value.pseudocode, 1600);
-  const code = typeof value.code === "string" ? value.code.slice(0, 12000).trim() : "";
-  const complexity = text(value.complexity, 700);
-  const pitfalls = arrayOfText(value.pitfalls, 6, 280);
-  if (!approach || !pseudocode || !code || !complexity || !pitfalls.length) return null;
-  return { approach, pseudocode, code, complexity, pitfalls };
 }
 
 function safeJsonValue(value) {
@@ -31,6 +21,15 @@ function safeJsonValue(value) {
   }
 }
 
+export function valueMatchesExecutionType(value, type) {
+  if (type === "string") return typeof value === "string" && value.length <= 500;
+  if (type === "integer") return Number.isSafeInteger(value) && Math.abs(value) <= 1_000_000;
+  if (type === "boolean") return typeof value === "boolean";
+  if (!type.endsWith("-array") || !Array.isArray(value) || value.length > 100) return false;
+  const itemType = type.replace("-array", "");
+  return value.every((item) => valueMatchesExecutionType(item, itemType));
+}
+
 export function validateChallenge(value) {
   if (!value || typeof value !== "object") return null;
   const title = text(value.title, 140);
@@ -39,6 +38,8 @@ export function validateChallenge(value) {
   const examples = arrayOfText(value.examples, 3, 500);
   const constraints = arrayOfText(value.constraints, 8, 220);
   const concepts = arrayOfText(value.concepts, 6, 100);
+  const inputType = executionValueTypes.has(value.inputType) ? value.inputType : "";
+  const outputType = executionValueTypes.has(value.outputType) ? value.outputType : "";
   const tests = Array.isArray(value.tests)
     ? value.tests.slice(0, 6).map((test) => {
       const input = safeJsonValue(test?.input);
@@ -47,6 +48,7 @@ export function validateChallenge(value) {
       return { input, expected };
     }).filter(Boolean)
     : [];
-  if (!title || !prompt || !goal || examples.length < 1 || constraints.length < 2 || tests.length < 3) return null;
-  return { title, prompt, goal, examples, constraints, concepts, tests };
+  if (!title || !prompt || !goal || !inputType || !outputType || examples.length < 1 || constraints.length < 2 || tests.length < 3) return null;
+  if (tests.some((test) => !valueMatchesExecutionType(test.input, inputType) || !valueMatchesExecutionType(test.expected, outputType))) return null;
+  return { title, prompt, goal, examples, constraints, concepts, inputType, outputType, tests };
 }
