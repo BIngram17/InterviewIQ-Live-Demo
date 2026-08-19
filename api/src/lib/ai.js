@@ -191,7 +191,7 @@ async function parseGeminiJson(response) {
   return JSON.parse(normalizeJsonText(content));
 }
 
-export async function completeJson({ system, data, maxTokens = 1800, validate }) {
+export async function completeJson({ system, data, maxTokens = 1800, validate, preferFallback = false }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ApiError(503, "Live AI is not configured yet.");
@@ -203,7 +203,9 @@ export async function completeJson({ system, data, maxTokens = 1800, validate })
   let sawInvalidContent = false;
   const modelAttempts = PRIMARY_MODEL === FALLBACK_MODEL
     ? [PRIMARY_MODEL, PRIMARY_MODEL]
-    : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
+    : preferFallback
+      ? [FALLBACK_MODEL, PRIMARY_MODEL, FALLBACK_MODEL]
+      : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
 
   for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {
     const remainingMs = deadline - Date.now();

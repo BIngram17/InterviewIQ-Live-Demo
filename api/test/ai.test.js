@@ -132,6 +132,21 @@ test("completeJson gives the fallback a fresh timeout after a stalled primary", 
   assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
 });
 
+test("completeJson can use the faster fallback model first for latency-sensitive requests", async () => {
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"review":"ready"}' }] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const result = await completeJson({ system: "Return a review.", data: {}, preferFallback: true });
+
+  assert.deepEqual(result, { review: "ready" });
+  assert.match(requestedUrl, /gemini-3\.5-flash-lite:generateContent$/);
+});
+
 test("completeJson translates Gemini rate limits into a safe public error", async () => {
   globalThis.fetch = async () => new Response("{}", { status: 429 });
 
