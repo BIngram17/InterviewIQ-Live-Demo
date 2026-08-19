@@ -3,6 +3,18 @@ import { expect, test } from "@playwright/test";
 const resumeText = "Jordan Lee Software Developer. Built accessible React applications and Node.js APIs. Improved release reliability through automated tests and GitHub Actions. Collaborated with product teams to deliver customer-facing features.";
 const jobDescription = "Build accessible React applications and reliable Node.js services. Write automated tests, collaborate across product teams, and improve continuous delivery workflows.";
 
+test("main sidebar keeps all three product destinations visible", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const sidebar = page.locator(".sidebar");
+  const resumeLink = sidebar.getByRole("link", { name: "Resume Studio" });
+  await expect(resumeLink).toBeVisible();
+  const [sidebarBox, resumeBox] = await Promise.all([sidebar.boundingBox(), resumeLink.boundingBox()]);
+  expect(sidebarBox).not.toBeNull();
+  expect(resumeBox).not.toBeNull();
+  expect(resumeBox!.x + resumeBox!.width).toBeLessThanOrEqual(sidebarBox!.x + sidebarBox!.width);
+});
+
 test("Resume Studio completes and remembers a tailored application", async ({ page }) => {
   await page.route("**/api/job-import", (route) => route.fulfill({ json: { jobTitle: "Software Developer", company: "Northstar", level: "entry", jobDescription, sourceUrl: "https://example.com/job" } }));
   await page.route("**/api/resume-extract", (route) => route.fulfill({ json: { resumeText, fileName: "resume.txt" } }));
