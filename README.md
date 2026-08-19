@@ -5,10 +5,11 @@
 [![Azure Functions](https://img.shields.io/badge/Azure-Functions-2563eb?style=for-the-badge&logo=microsoftazure)](https://azure.microsoft.com/products/functions)
 [![Google AI Studio](https://img.shields.io/badge/AI-Google_AI_Studio-4285f4?style=for-the-badge&logo=google)](https://aistudio.google.com/)
 
-InterviewIQ is a production-deployed AI interview coaching application. It
+InterviewIQ is a production-deployed AI career preparation application. It
 analyzes a job description, generates fresh questions calibrated to the role and
 seniority level, evaluates typed or spoken answers, and provides structured,
-actionable coaching. Its Resume Studio also reviews resumes, recommends
+actionable coaching. A guided Coding Practice workspace teaches candidates how
+to reason from prompt to tested solution. Its Resume Studio also reviews resumes, recommends
 job-specific improvements, and generates grounded, one-page cover letters with
 Times New Roman 12-point DOCX export.
 
@@ -32,10 +33,16 @@ Times New Roman 12-point DOCX export.
   an improved response
 - Records voice answers in the browser and supports speech-to-text where the
   browser provides the Web Speech API
-- Provides a coding workspace for JavaScript, Python, and Java
+- Provides a dedicated, AI-generated Coding Practice workspace for JavaScript,
+  Python, Java, C#, and Rust
+- Guides learners through understanding the prompt, identifying edge cases,
+  planning, pseudocode, implementation, testing, complexity, and final review,
+  with free step navigation and visible progress
+- Autosaves the current coding challenge, reasoning notes, code, tests, and
+  coaching feedback in device-local browser storage
 - Runs JavaScript tests inside a restricted browser iframe and automatically
   sends the result to the AI coding coach
-- Reviews Python and Java solutions as inert text without executing them
+- Reviews Python, Java, C#, and Rust solutions as inert text without executing them
 - Provides IDE-style coding controls with Tab/Shift+Tab indentation, automatic
   indentation on Enter, and closing-brace outdent behavior
 - Saves interview sessions and session-scoped answer attempts in browser storage
@@ -43,7 +50,8 @@ Times New Roman 12-point DOCX export.
   text, reviews, targeted edits, and versioned cover letters in device-local
   storage for up to 24 applications with restore, rename, confirmed delete,
   and undo controls
-- Includes copy and downloadable text feedback reports
+- Gives every Copy action an immediate copied/failed status and includes
+  downloadable text feedback reports
 - Provides responsive light and dark themes
 - Includes a dedicated Resume Studio for role-fit reviews, targeted resume
   changes linked to job requirements, ATS keyword guidance, and grounded cover
@@ -72,6 +80,7 @@ Times New Roman 12-point DOCX export.
 flowchart LR
     U["Browser"] --> UI["Next.js + React static frontend"]
     UI --> INTERVIEW["Interview Prep"]
+    UI --> CODING["Guided Coding Practice"]
     UI --> RESUME["Resume Studio"]
     API["Azure Functions API"]
     AI["Google AI Studio / Gemini API"]
@@ -83,6 +92,9 @@ flowchart LR
     INTERVIEW --> API
     INTERVIEW --> RUNNER
     INTERVIEW --> STORE
+    CODING --> API
+    CODING --> RUNNER
+    CODING --> STORE
     RESUME --> API
     RESUME --> STORE
     FILES --> API
@@ -100,7 +112,9 @@ credential never enters client-side code.
 | --- | --- |
 | `POST /api/interview` | Analyze the role and generate a fresh interview set |
 | `POST /api/feedback` | Score and coach a behavioral or technical answer |
-| `POST /api/code-feedback` | Review JavaScript, Python, or Java code as text |
+| `POST /api/coding-challenge` | Generate a language-, difficulty-, and topic-specific coding challenge |
+| `POST /api/coding-coach` | Coach the learner at one reasoning or implementation stage |
+| `POST /api/code-feedback` | Review JavaScript, Python, Java, C#, or Rust code as text |
 | `POST /api/job-import` | Safely fetch a public posting and extract structured job details |
 | `POST /api/resume-extract` | Extract bounded plain text from an uploaded PDF, DOCX, or TXT resume |
 | `POST /api/resume-tools` | Review resumes, suggest edits, or generate a grounded cover letter |
@@ -238,7 +252,8 @@ interviewiq-live-demo/
 |   |-- src/functions/       # Interview, resume, answer, and code endpoints
 |   `-- src/lib/ai.js        # Gemini API client and API safeguards
 |-- app/
-|   |-- components/          # Job importer and persistent product switcher
+|   |-- coding/              # Guided five-language problem-solving workspace
+|   |-- components/          # Shared importer, navigation, and copy controls
 |   |-- resume/              # Resume review and cover-letter workspace
 |   |-- page.tsx             # Interview workflow and client state
 |   |-- globals.css          # Responsive light/dark product interface
@@ -260,7 +275,7 @@ interviewiq-live-demo/
 - The public demo does not require an account.
 - Recorded audio remains in the browser and is not uploaded to the API.
 - JavaScript is the only language executed by the built-in test runner.
-- Python and Java receive AI review without server-side execution.
+- Python, Java, C#, and Rust receive AI review without server-side execution.
 - AI availability and limits depend on the Gemini API and the configured model.
 - The public demo's rate limiter is instance-local and does not replace a
   provider-side budget or quota cap.

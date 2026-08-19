@@ -55,3 +55,42 @@ test("mobile layout prioritizes the target job and collapses saved applications"
   await page.getByRole("button", { name: "Start new" }).click();
   await expect(jobUrl).toHaveValue("");
 });
+
+test("Coding Practice supports five languages, free step navigation, and copy confirmation", async ({ page }) => {
+  await page.route("**/api/coding-challenge", (route) => route.fulfill({ json: {
+    title: "Count unique tags",
+    goal: "Practice using a set while preserving a clear input contract.",
+    prompt: "Return the number of unique strings in the input array.",
+    examples: ['["api", "ui", "api"] returns 2'],
+    constraints: ["The input is an array of strings.", "The input may be empty."],
+    concepts: ["sets", "iteration"],
+    tests: [
+      { input: ["api", "ui", "api"], expected: 2 },
+      { input: [], expected: 0 },
+      { input: ["api"], expected: 1 },
+    ],
+    language: "javascript",
+    difficulty: "intermediate",
+    topic: "maps-sets",
+  } }));
+
+  await page.goto("/coding/");
+  await expect(page.getByRole("navigation", { name: "InterviewIQ tools" })).toContainText("Coding Practice");
+  await expect(page.getByLabel("Language").locator("option")).toHaveText(["JavaScript", "Python", "Java", "C#", "Rust"]);
+  await page.getByLabel("Topic").selectOption("maps-sets");
+  await page.getByRole("button", { name: "Generate guided challenge" }).click();
+  await expect(page.getByRole("heading", { name: "Count unique tags" })).toBeVisible();
+  await page.getByRole("button", { name: /Approach/ }).click();
+  await expect(page.getByRole("heading", { name: "Choose an approach" })).toBeVisible();
+  await page.getByLabel("Your work").fill("I will compare a nested-loop approach with a set, then use the set for linear expected time.");
+  await expect(page.getByText("13% complete")).toBeVisible();
+  await page.getByRole("button", { name: "Copy challenge" }).click();
+  await expect(page.getByRole("button", { name: /Challenge copied/ })).toBeVisible();
+  await page.getByRole("button", { name: /Code/ }).click();
+  const editor = page.getByLabel("JavaScript solution");
+  await editor.fill("function solution(input) {\n  return new Set(input).size;\n}");
+  await editor.press("End");
+  await editor.press("Enter");
+  await editor.press("Tab");
+  await expect(editor).toHaveValue(/\n  $/);
+});

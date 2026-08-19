@@ -3,6 +3,7 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import JobUrlImporter, { ImportedJob } from "./components/JobUrlImporter";
+import CopyButton from "./components/CopyButton";
 import ProductSwitcher from "./components/ProductSwitcher";
 import { applyCodeEditorKey } from "./lib/code-editor";
 
@@ -400,7 +401,6 @@ export default function Home() {
   const [feedbackReady, setFeedbackReady] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const [feedbackError, setFeedbackError] = useState("");
-  const [feedbackActionStatus, setFeedbackActionStatus] = useState("");
   const [codeFeedback, setCodeFeedback] = useState<CodeFeedback | null>(null);
   const [codeFeedbackLanguage, setCodeFeedbackLanguage] = useState<CodeLanguage>("javascript");
   const [isReviewingCode, setIsReviewingCode] = useState(false);
@@ -426,12 +426,6 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.dataset.theme = isDarkMode ? "dark" : "light";
   }, [isDarkMode]);
-
-  useEffect(() => {
-    // Reset the transient copy/download status when a new feedback object arrives.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFeedbackActionStatus("");
-  }, [feedback]);
 
   useEffect(() => {
     try {
@@ -881,46 +875,6 @@ export default function Home() {
     if (recorderRef.current) setVoiceStatus("Recording saved — review or play it back");
   }
 
-  const copyFeedback = async () => {
-    if (!feedback) return;
-    const report = buildFeedbackReport(
-      feedback,
-      sessionAnswerHistory.find((attempt) => attempt.id === activeAttemptId)?.question
-        || selectedQuestion?.question
-        || "Not specified",
-      jobTitle,
-      company,
-    );
-
-    const fallbackCopy = () => {
-      const textarea = document.createElement("textarea");
-      textarea.value = report;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      const copied = document.execCommand("copy");
-      document.body.removeChild(textarea);
-      if (!copied) throw new Error("Copy was blocked.");
-    };
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(report);
-        } catch {
-          fallbackCopy();
-        }
-      } else {
-        fallbackCopy();
-      }
-      setFeedbackActionStatus("Feedback copied to your clipboard.");
-    } catch {
-      setFeedbackActionStatus("Clipboard access was blocked. Use Download instead.");
-    }
-  };
-
   const applyImportedJob = (job: ImportedJob) => {
     setJobTitle(job.jobTitle);
     setCompany(job.company);
@@ -948,7 +902,7 @@ export default function Home() {
     link.click();
     document.body.removeChild(link);
     window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    setFeedbackActionStatus("Feedback report downloaded.");
+    setNotice("Feedback report downloaded.");
   };
 
   return (
@@ -1260,11 +1214,10 @@ export default function Home() {
             ) : feedback ? (
               <div className="feedback-content">
                 <div className="feedback-actions">
-                  <button className="small-action-button" type="button" onClick={copyFeedback}>Copy feedback</button>
+                  <CopyButton text={buildFeedbackReport(feedback, sessionAnswerHistory.find((attempt) => attempt.id === activeAttemptId)?.question || selectedQuestion?.question || "Not specified", jobTitle, company)} label="Copy feedback" copiedLabel="Feedback copied" />
                   <button className="small-action-button" type="button" onClick={() => setAnswer(feedback.improvedAnswer)}>Use improved answer</button>
                   <button className="small-action-button" type="button" onClick={downloadFeedback}>Download</button>
                 </div>
-                {feedbackActionStatus && <p className="feedback-action-status" role="status">{feedbackActionStatus}</p>}
                 <FeedbackBlock title="Strengths" items={feedback.strengths} />
                 <FeedbackBlock title="Areas to improve" items={feedback.improvements} />
                 <div className="feedback-block"><h3>Coaching notes</h3><p>{feedback.coaching}</p></div>

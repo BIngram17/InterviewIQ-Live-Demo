@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import CopyButton from "../components/CopyButton";
 import ProductSwitcher from "../components/ProductSwitcher";
 import JobUrlImporter, { ImportedJob } from "../components/JobUrlImporter";
 
@@ -356,11 +357,6 @@ export default function ResumeStudio() {
     }
   };
 
-  const copyText = async (value: string, message: string) => {
-    try { await navigator.clipboard.writeText(value); setResumeStatus(message); }
-    catch { setResumeStatus("Clipboard access was blocked. Select the text to copy it."); }
-  };
-
   const downloadCover = async (format: "txt" | "docx") => {
     if (!coverResult?.coverLetter) return;
     const base = safeFileName(`${company || "company"}-${jobTitle || "role"}-cover-letter`);
@@ -384,16 +380,6 @@ export default function ResumeStudio() {
       downloadBlob(await Packer.toBlob(document), `${base}.docx`);
     }
     setCoverStatus(`Downloaded ${format.toUpperCase()} cover letter.`);
-  };
-
-  const copyCoverLetter = async () => {
-    if (!coverResult?.coverLetter) return;
-    try {
-      await navigator.clipboard.writeText(coverResult.coverLetter);
-      setCoverStatus("Cover letter copied to your clipboard.");
-    } catch {
-      setCoverStatus("Clipboard access was blocked. Select the letter text to copy it.");
-    }
   };
 
   return (
@@ -501,7 +487,7 @@ export default function ResumeStudio() {
 
             <article className="panel studio-panel resume-result-panel">
               <div className="panel-header"><div><p className="section-label">AI resume coach</p><h2>{reviewResult?.headline || "Review and recommendations"}</h2></div>{reviewResult?.score && <span className="resume-score">{reviewResult.score}%<small>fit</small></span>}</div>
-              {!reviewResult ? <EmptyResult text="Upload or paste your resume, add the target job, and run the review to see strengths, gaps, ATS keywords, and exact changes." /> : <ReviewResultView result={reviewResult} onCopy={(value, message) => copyText(value, message)} />}
+              {!reviewResult ? <EmptyResult text="Upload or paste your resume, add the target job, and run the review to see strengths, gaps, ATS keywords, and exact changes." /> : <ReviewResultView result={reviewResult} />}
             </article>
           </div>
 
@@ -515,7 +501,7 @@ export default function ResumeStudio() {
 
             <article className="panel studio-panel resume-result-panel cover-result-panel">
               <div className="panel-header"><div><p className="section-label">AI cover letter</p><h2>{coverResult?.headline || "Your tailored letter"}</h2></div></div>
-              {!coverResult ? <EmptyResult text="The letter will use only facts from your resume and Candidate Profile, then align them with this job posting." /> : <CoverLetterView result={coverResult} onCopy={copyCoverLetter} onDownload={downloadCover} />}
+              {!coverResult ? <EmptyResult text="The letter will use only facts from your resume and Candidate Profile, then align them with this job posting." /> : <CoverLetterView result={coverResult} onDownload={downloadCover} />}
               {!!coverVersions.length && <section className="cover-version-list"><h3>Saved versions</h3>{coverVersions.map((version, index) => <button className={version.result === coverResult ? "active" : ""} type="button" key={version.id} onClick={() => { setCoverResult(version.result); setCoverTone(version.tone); }}><span>Version {coverVersions.length - index} · {formatTone(version.tone)}</span><small>{formatMemoryDate(version.createdAt)}</small></button>)}</section>}
             </article>
           </div>
@@ -525,7 +511,7 @@ export default function ResumeStudio() {
   );
 }
 
-function ReviewResultView({ result, onCopy }: { result: ResumeResult; onCopy: (value: string, message: string) => void }) {
+function ReviewResultView({ result }: { result: ResumeResult }) {
   return <div className="resume-result-content">
     {result.summary && <p className="result-summary">{result.summary}</p>}
     {result.score && result.projectedScore && <section className="score-path-card"><div><span>Current fit</span><strong>{result.score}%</strong></div><span className="score-path-arrow">→</span><div><span>Potential fit</span><strong>{result.projectedScore}%</strong></div><p>Potential fit assumes every safe rewrite is applied and every requested detail is verified. It is an estimate, not an ATS guarantee.</p></section>}
@@ -533,13 +519,24 @@ function ReviewResultView({ result, onCopy }: { result: ResumeResult; onCopy: (v
     <KeywordList items={result.atsKeywords} />
     <div className="result-two-column"><ResultList title="What already works" items={result.strengths} /><ResultList title="Gaps to address" items={result.gaps} /></div>
     <ResultList title="Highest-impact next steps" items={result.nextSteps} />
-    {!!result.changes?.length && <section className="targeted-changes-section"><div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><button className="small-action-button" type="button" onClick={() => onCopy(result.changes!.map((change) => `${formatOperation(change.operation)} — ${change.section}\nWhere: ${change.placement}\nChange: ${change.suggestion}\nExample: ${change.example}`).join("\n\n"), "All targeted changes copied.")}>Copy all</button></div>{result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}><div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your confirmation" : "Uses confirmed evidence"}</span></div><div className="change-placement"><span>{formatOperation(change.operation)}</span><p><strong>Where:</strong> {change.placement || `In the ${change.section} section`}</p></div>{change.sourceEvidence && <p className="source-evidence"><strong>{change.operation === "replace" ? "Replace this text:" : change.operation === "move" ? "Move this text:" : "Confirmed evidence:"}</strong> “{change.sourceEvidence}”</p>}{change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}{change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}{change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>{change.example && <div><strong>Example</strong><p>{change.example}</p><button className="small-action-button" type="button" onClick={() => onCopy(change.example, `${change.section} example copied.`)}>Copy example</button></div>}</section>)}</section>}
+    {!!result.changes?.length && <section className="targeted-changes-section">
+      <div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><CopyButton text={result.changes.map((change) => `${formatOperation(change.operation)} — ${change.section}\nWhere: ${change.placement}\nChange: ${change.suggestion}\nExample: ${change.example}`).join("\n\n")} label="Copy all" copiedLabel="All copied" /></div>
+      {result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}>
+        <div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your confirmation" : "Uses confirmed evidence"}</span></div>
+        <div className="change-placement"><span>{formatOperation(change.operation)}</span><p><strong>Where:</strong> {change.placement || `In the ${change.section} section`}</p></div>
+        {change.sourceEvidence && <p className="source-evidence"><strong>{change.operation === "replace" ? "Replace this text:" : change.operation === "move" ? "Move this text:" : "Confirmed evidence:"}</strong> “{change.sourceEvidence}”</p>}
+        {change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}
+        {change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}
+        {change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>
+        {change.example && <div><strong>Example</strong><p>{change.example}</p><CopyButton text={change.example} label="Copy example" copiedLabel="Example copied" /></div>}
+      </section>)}
+    </section>}
   </div>;
 }
 
-function CoverLetterView({ result, onCopy, onDownload }: { result: ResumeResult; onCopy: () => void; onDownload: (format: "txt" | "docx") => void }) {
+function CoverLetterView({ result, onDownload }: { result: ResumeResult; onDownload: (format: "txt" | "docx") => void }) {
   const wordCount = result.coverLetter?.trim().split(/\s+/).filter(Boolean).length || 0;
-  return <div className="resume-result-content"><div className="result-actions"><span className="count-pill">{wordCount} words</span><button className="small-action-button" type="button" onClick={onCopy}>Copy</button><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
+  return <div className="resume-result-content"><div className="result-actions"><span className="count-pill">{wordCount} words</span><CopyButton text={result.coverLetter || ""} label="Copy" copiedLabel="Letter copied" /><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
 }
 
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }

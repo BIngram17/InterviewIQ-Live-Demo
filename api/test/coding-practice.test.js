@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { codingLanguages, validateChallenge } from "../src/lib/coding-practice.js";
+
+test("supports all five coding-practice languages", () => {
+  assert.deepEqual([...codingLanguages], ["javascript", "python", "java", "csharp", "rust"]);
+});
+
+test("validates a complete JSON-compatible coding challenge", () => {
+  const result = validateChallenge({
+    title: "Count events",
+    goal: "Practice frequency maps.",
+    prompt: "Return a count for every event type.",
+    examples: ['["a", "b", "a"] returns {"a":2,"b":1}'],
+    constraints: ["0 to 100 events", "Each event is a string"],
+    concepts: ["Hash maps"],
+    tests: [
+      { input: ["a", "b", "a"], expected: { a: 2, b: 1 } },
+      { input: [], expected: {} },
+      { input: ["x"], expected: { x: 1 } },
+    ],
+  });
+  assert.equal(result?.title, "Count events");
+  assert.equal(result?.tests.length, 3);
+});
+
+test("rejects incomplete challenges and oversized test values", () => {
+  assert.equal(validateChallenge({ title: "Missing details" }), null);
+  const huge = "x".repeat(1300);
+  assert.equal(validateChallenge({
+    title: "Too large",
+    goal: "Goal",
+    prompt: "Prompt",
+    examples: ["Example"],
+    constraints: ["One", "Two"],
+    tests: [{ input: huge, expected: 1 }, { input: 2, expected: 2 }, { input: 3, expected: 3 }],
+  }), null);
+});

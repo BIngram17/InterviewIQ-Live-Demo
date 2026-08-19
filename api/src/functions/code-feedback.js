@@ -7,7 +7,7 @@ app.http("codeFeedback", {
   route: "code-feedback",
   handler: withApi(async (request) => {
     const body = await readBody(request);
-    const language = ["javascript", "python", "java"].includes(body.language) ? body.language : "";
+    const language = ["javascript", "python", "java", "csharp", "rust"].includes(body.language) ? body.language : "";
     const challenge = text(body.challenge, 1400);
     const code = typeof body.code === "string" ? body.code.slice(0, 12000) : "";
     const testSummary = text(body.testSummary, 500);

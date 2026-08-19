@@ -3,13 +3,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://wonderful-ocean-0c82eb910.7.azurestaticapps.net"),
-  title: "InterviewIQ - AI Interview Preparation",
+  title: "InterviewIQ - AI Career Preparation",
   description:
-    "Analyze a job description, generate tailored interview questions, practice by typing or voice, and get actionable AI coaching.",
+    "Prepare for interviews, learn coding problem solving in five languages, tailor resumes, and generate grounded cover letters with AI coaching.",
   openGraph: {
     title: "InterviewIQ - Practice smarter. Answer stronger.",
     description:
-      "A full-stack AI interview preparation product demo with voice practice.",
+      "AI interview prep, guided coding practice, resume review, and cover-letter generation in one live product demo.",
     images: [
       {
         url: "/og-v2.png",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "InterviewIQ - Practice smarter. Answer stronger.",
     description:
-      "A full-stack AI interview preparation product demo with voice practice.",
+      "AI interview prep, guided coding practice, resume review, and cover-letter generation in one live product demo.",
     images: ["/og-v2.png"],
   },
 };
