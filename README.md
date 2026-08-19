@@ -51,6 +51,7 @@ Times New Roman 12-point DOCX export.
 - Provides IDE-style coding controls with Tab/Shift+Tab indentation, automatic
   indentation on Enter, and closing-brace outdent behavior
 - Saves interview sessions and session-scoped answer attempts in browser storage
+- Keeps saved interview sessions collapsed until the user chooses to show them
 - Tracks application readiness and autosaves named drafts, extracted resume
   text, reviews, targeted edits, and versioned cover letters in device-local
   storage for up to 24 applications with restore, rename, confirmed delete,
@@ -72,7 +73,8 @@ Times New Roman 12-point DOCX export.
 - Uses a transparent 100-point job-fit rubric, projected improvement score, and
   prioritized edits with estimated point impact to show the strongest path to a
   90%+ match without inventing qualifications
-- Exports cover letters as TXT or DOCX and preserves up to ten generated versions
+- Generates 325-400 word cover letters, exports them as TXT or DOCX, and
+  preserves up to ten generated versions
 - Provides a persistent Interview Prep / Resume Studio switcher on desktop and mobile
 - Accepts drag-and-drop PDF, DOCX, and TXT resumes and extracts their text
   without permanently storing the uploaded file
