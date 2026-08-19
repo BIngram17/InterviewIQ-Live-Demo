@@ -415,6 +415,7 @@ export default function Home() {
   const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
   const [isAnswerHistoryLoaded, setIsAnswerHistoryLoaded] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SavedInterviewSession[]>([]);
+  const [areSavedSessionsExpanded, setAreSavedSessionsExpanded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [areSavedSessionsLoaded, setAreSavedSessionsLoaded] = useState(false);
 
@@ -988,12 +989,15 @@ export default function Home() {
         <section className="panel session-history-panel">
           <div className="panel-header">
             <div><p className="section-label">Your progress</p><h2>Saved interview sessions</h2></div>
-            <span className="count-pill">{savedSessions.length} sessions</span>
+            <div className="memory-header-actions">
+              <span className="count-pill">{savedSessions.length} sessions</span>
+              <button className="ghost-button" type="button" aria-expanded={areSavedSessionsExpanded} aria-controls="saved-interview-session-list" onClick={() => setAreSavedSessionsExpanded((value) => !value)}>{areSavedSessionsExpanded ? "Hide saved" : "Show saved"}</button>
+            </div>
           </div>
-          {savedSessions.length === 0 ? (
+          {areSavedSessionsExpanded && (savedSessions.length === 0 ? (
             <EmptyState icon="01" title="No saved sessions yet" text="Start interview prep to create your first saved session on this device." />
           ) : (
-            <div className="session-list">
+            <div className="session-list" id="saved-interview-session-list">
               {savedSessions.map((session) => {
                 const attempts = answerHistory.filter((attempt) => attempt.sessionId === session.id);
                 const averageScore = attempts.length
@@ -1018,7 +1022,7 @@ export default function Home() {
                 );
               })}
             </div>
-          )}
+          ))}
         </section>
 
         <section className="layout-grid" id="practice">

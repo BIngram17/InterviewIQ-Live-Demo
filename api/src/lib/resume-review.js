@@ -42,6 +42,11 @@ export function countWords(value) {
   return content ? content.split(/\s+/).length : 0;
 }
 
+export function coverLetterInRange(value, minimum = 325, maximum = 400) {
+  const words = countWords(value);
+  return words >= minimum && words <= maximum;
+}
+
 export function mislabelsCompletedPastDate(change, resume, now = new Date()) {
   const issue = String(change?.currentIssue || "");
   if (!/future|upcoming|not yet occurred/i.test(issue)) return false;

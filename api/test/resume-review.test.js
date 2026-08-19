@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWords, currentDateIso, endsWithOmission, mislabelsCompletedPastDate, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation } from "../src/lib/resume-review.js";
+import { countWords, coverLetterInRange, currentDateIso, endsWithOmission, mislabelsCompletedPastDate, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -52,4 +52,11 @@ test("detects recommendations that would delete an existing skill", () => {
 test("counts cover-letter words across paragraphs and extra whitespace", () => {
   assert.equal(countWords("First paragraph.\n\nSecond   paragraph."), 4);
   assert.equal(countWords("   "), 0);
+});
+
+test("accepts only cover letters between 325 and 400 words", () => {
+  assert.equal(coverLetterInRange("word ".repeat(324)), false);
+  assert.equal(coverLetterInRange("word ".repeat(325)), true);
+  assert.equal(coverLetterInRange("word ".repeat(400)), true);
+  assert.equal(coverLetterInRange("word ".repeat(401)), false);
 });

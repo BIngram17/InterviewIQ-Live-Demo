@@ -22,6 +22,30 @@ test("main sidebar keeps all three product destinations visible", async ({ page 
   expect(codingBox!.x).toBeLessThan(resumeCtaBox!.x);
 });
 
+test("saved interview sessions are collapsed until requested", async ({ page }) => {
+  const savedSession = {
+    id: "saved-session-1",
+    key: "software|entry|northstar",
+    title: "Software Developer",
+    company: "Northstar",
+    level: "entry",
+    interviewType: "mixed",
+    jobDescription,
+    questions: [],
+    analysis: { summary: "Role summary", technical: [], soft: [], topics: [] },
+    createdAt: "2026-08-19T12:00:00.000Z",
+    updatedAt: "2026-08-19T12:00:00.000Z",
+  };
+  await page.addInitScript((session) => window.localStorage.setItem("interviewiq-saved-sessions-v1", JSON.stringify([session])), savedSession);
+  await page.goto("/");
+  const toggle = page.getByRole("button", { name: "Show saved" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("heading", { name: "Software Developer", level: 3 })).toHaveCount(0);
+  await toggle.click();
+  await expect(page.getByRole("button", { name: "Hide saved" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("heading", { name: "Software Developer", level: 3 })).toBeVisible();
+});
+
 test("Resume Studio completes and remembers a tailored application", async ({ page }) => {
   await page.route("**/api/job-import", (route) => route.fulfill({ json: { jobTitle: "Software Developer", company: "Northstar", level: "entry", jobDescription, sourceUrl: "https://example.com/job" } }));
   await page.route("**/api/resume-extract", (route) => route.fulfill({ json: { resumeText, fileName: "resume.txt" } }));
