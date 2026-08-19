@@ -25,7 +25,7 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await expect(page.getByRole("heading", { name: "Software Developer at Northstar" })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles({ name: "resume.txt", mimeType: "text/plain", buffer: Buffer.from(resumeText) });
   await page.getByRole("button", { name: /Review resume/ }).click();
-  await expect(page.getByText("Needs your input")).toBeVisible();
+  await expect(page.getByText("Needs your confirmation")).toBeVisible();
   await expect(page.getByText("Potential fit", { exact: true })).toBeVisible();
   await expect(page.getByText("93%")).toBeVisible();
   await expect(page.getByText("Potential lift:")).toBeVisible();
