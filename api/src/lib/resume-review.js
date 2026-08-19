@@ -11,6 +11,32 @@ export function safeChangeKind(value) {
   return value === "rewrite" ? "rewrite" : "needs-info";
 }
 
+export function safeChangeOperation(value) {
+  return ["add", "replace", "move"].includes(value) ? value : "add";
+}
+
+export function resumeContainsEvidence(resume, evidence) {
+  const normalize = (value) => String(value || "")
+    .toLowerCase()
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9+#.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalizedEvidence = normalize(evidence);
+  return normalizedEvidence.length >= 8 && normalize(resume).includes(normalizedEvidence);
+}
+
+export function endsWithOmission(value) {
+  return /(?:\.\.\.|…)[\s"']*$/.test(String(value || ""));
+}
+
+export function requestsSkillDeletion(change) {
+  const value = [change?.section, change?.currentIssue, change?.suggestion, change?.example]
+    .map((item) => String(item || ""))
+    .join(" ");
+  return /\b(?:delete|remove|omit|drop|eliminate)\b.{0,100}\bskills?\b|\bskills?\b.{0,100}\b(?:delete|remove|omit|drop|eliminate)\b/i.test(value);
+}
+
 export function countWords(value) {
   const content = String(value || "").trim();
   return content ? content.split(/\s+/).length : 0;

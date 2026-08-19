@@ -49,7 +49,13 @@ Times New Roman 12-point DOCX export.
   changes linked to job requirements, ATS keyword guidance, and grounded cover
   letters with professional, concise, and conversational tones
 - Distinguishes safe rewrites from recommendations that require candidate input,
-  with per-change and bulk-copy controls
+  with per-change and bulk-copy controls; every edit identifies whether to add,
+  replace, or move content and names its exact resume placement
+- Grounds rewrites in exact resume evidence, rejects abbreviated recommendations,
+  preserves all existing skills, and treats job-posting-only skills as unconfirmed
+- Stores an optional Candidate Profile of user-confirmed skills, experience,
+  achievements, education, certifications, and contact details in device-local
+  browser storage with edit, export, and clear controls
 - Uses a transparent 100-point job-fit rubric, projected improvement score, and
   prioritized edits with estimated point impact to show the strongest path to a
   90%+ match without inventing qualifications

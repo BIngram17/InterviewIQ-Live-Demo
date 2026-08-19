@@ -5,7 +5,7 @@ import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import ProductSwitcher from "../components/ProductSwitcher";
 import JobUrlImporter, { ImportedJob } from "../components/JobUrlImporter";
 
-type Change = { section: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
+type Change = { section: string; operation?: "add" | "replace" | "move"; placement?: string; sourceEvidence?: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
 type ScoreBreakdown = { category: string; score: number; maxScore: number; evidence: string; improvement: string };
 type ResumeResult = {
   action: "review" | "cover-letter";
@@ -39,9 +39,12 @@ type SavedApplication = {
 };
 type CoverTone = "standard" | "concise" | "conversational";
 type CoverVersion = { id: string; createdAt: number; tone: CoverTone; result: ResumeResult };
+type CandidateProfile = { contactDetails: string; confirmedSkills: string; experienceHighlights: string; achievements: string; educationCertifications: string };
 
 const applicationStorageKey = "interviewiq-saved-applications-v1";
+const candidateProfileStorageKey = "interviewiq-candidate-profile-v1";
 const maxSavedApplications = 24;
+const emptyCandidateProfile: CandidateProfile = { contactDetails: "", confirmedSkills: "", experienceHighlights: "", achievements: "", educationCertifications: "" };
 
 export default function ResumeStudio() {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -72,9 +75,41 @@ export default function ResumeStudio() {
   const [renameValue, setRenameValue] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState("");
   const [deletedApplication, setDeletedApplication] = useState<SavedApplication | null>(null);
+  const [candidateProfile, setCandidateProfile] = useState<CandidateProfile>(emptyCandidateProfile);
+  const [isCandidateProfileLoaded, setIsCandidateProfileLoaded] = useState(false);
+  const [isCandidateProfileOpen, setIsCandidateProfileOpen] = useState(false);
+  const [isCandidateProfileClearPending, setIsCandidateProfileClearPending] = useState(false);
+  const [candidateProfileStatus, setCandidateProfileStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { document.documentElement.dataset.theme = isDarkMode ? "dark" : "light"; }, [isDarkMode]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(candidateProfileStorageKey);
+      const parsed = stored ? JSON.parse(stored) : {};
+      const profile = Object.fromEntries(Object.keys(emptyCandidateProfile).map((key) => [key, typeof parsed?.[key] === "string" ? parsed[key] : ""])) as CandidateProfile;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCandidateProfile(profile);
+    } catch {
+      window.localStorage.removeItem(candidateProfileStorageKey);
+    } finally {
+      setIsCandidateProfileLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isCandidateProfileLoaded) return;
+    const timeout = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(candidateProfileStorageKey, JSON.stringify(candidateProfile));
+        setCandidateProfileStatus(Object.values(candidateProfile).some((value) => value.trim()) ? "Profile saved in this browser." : "");
+      } catch {
+        setCandidateProfileStatus("Candidate Profile could not be saved because browser storage is full.");
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [candidateProfile, isCandidateProfileLoaded]);
 
   useEffect(() => {
     try {
@@ -214,6 +249,33 @@ export default function ResumeStudio() {
     setRenamingId("");
   };
 
+  const updateCandidateProfile = (field: keyof CandidateProfile, value: string) => {
+    setCandidateProfile((current) => ({ ...current, [field]: value }));
+    setReviewResult(null);
+    setCoverResult(null);
+    setIsCandidateProfileClearPending(false);
+  };
+
+  const clearCandidateProfile = () => {
+    setCandidateProfile(emptyCandidateProfile);
+    setReviewResult(null);
+    setCoverResult(null);
+    setIsCandidateProfileClearPending(false);
+    setCandidateProfileStatus("Candidate Profile cleared from this browser.");
+  };
+
+  const exportCandidateProfile = () => {
+    const content = [
+      ["Contact details", candidateProfile.contactDetails],
+      ["Confirmed skills", candidateProfile.confirmedSkills],
+      ["Experience highlights", candidateProfile.experienceHighlights],
+      ["Achievements and metrics", candidateProfile.achievements],
+      ["Education and certifications", candidateProfile.educationCertifications],
+    ].filter(([, value]) => value.trim()).map(([label, value]) => `${label}\n${value}`).join("\n\n");
+    downloadBlob(new Blob([content], { type: "text/plain;charset=utf-8" }), "interviewiq-candidate-profile.txt");
+    setCandidateProfileStatus("Candidate Profile exported as a text file.");
+  };
+
   const applyImportedJob = (job: ImportedJob) => {
     setJobTitle(job.jobTitle);
     setCompany(job.company);
@@ -262,6 +324,7 @@ export default function ResumeStudio() {
   const jobReady = jobTitle.trim().length >= 2 && jobDescription.trim().length >= 50;
   const resumeReady = resume.trim().length >= 120;
   const toolsReady = jobReady && resumeReady;
+  const candidateProfileSections = Object.values(candidateProfile).filter((value) => value.trim()).length;
 
   const runTool = async (action: "review" | "cover-letter") => {
     if (!toolsReady) return;
@@ -274,7 +337,7 @@ export default function ResumeStudio() {
       const response = await fetch("/api/resume-tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resume, jobTitle, company, level, jobDescription, tone: coverTone }),
+        body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "The resume coach could not complete this request.");
@@ -390,6 +453,21 @@ export default function ResumeStudio() {
           ))}
         </section>
 
+        <section className="panel candidate-profile-panel">
+          <div className="panel-header">
+            <div><p className="section-label">Candidate Profile</p><h2>Confirmed career facts</h2><p className="memory-note">Reusable facts from current or previous resumes. Saved only in this browser and used only when you request AI assistance.</p></div>
+            <div className="memory-header-actions"><span className="count-pill">{candidateProfileSections} / 5 completed</span><button className="ghost-button" type="button" onClick={() => setIsCandidateProfileOpen((value) => !value)}>{isCandidateProfileOpen ? "Hide profile" : candidateProfileSections ? "Edit profile" : "Create profile"}</button>{candidateProfileSections > 0 && <button className="ghost-button" type="button" onClick={exportCandidateProfile}>Export profile</button>}{isCandidateProfileClearPending ? <><button className="ghost-button danger-action" type="button" onClick={clearCandidateProfile}>Confirm clear</button><button className="ghost-button" type="button" onClick={() => setIsCandidateProfileClearPending(false)}>Cancel</button></> : candidateProfileSections > 0 && <button className="ghost-button danger-action" type="button" onClick={() => setIsCandidateProfileClearPending(true)}>Clear profile</button>}</div>
+          </div>
+          {isCandidateProfileOpen && <div className="candidate-profile-fields">
+            <label className="field"><span>Confirmed skills</span><textarea value={candidateProfile.confirmedSkills} maxLength={1800} onChange={(event) => updateCandidateProfile("confirmedSkills", event.target.value)} placeholder="List only skills and tools you have personally confirmed." /></label>
+            <label className="field"><span>Experience highlights</span><textarea value={candidateProfile.experienceHighlights} maxLength={2200} onChange={(event) => updateCandidateProfile("experienceHighlights", event.target.value)} placeholder="Reusable responsibilities, projects, leadership, or domain experience from previous resumes." /></label>
+            <label className="field"><span>Achievements and metrics</span><textarea value={candidateProfile.achievements} maxLength={1800} onChange={(event) => updateCandidateProfile("achievements", event.target.value)} placeholder="Verified outcomes, numbers, awards, or accomplishments. Include context so the AI does not guess." /></label>
+            <label className="field"><span>Education and certifications</span><textarea value={candidateProfile.educationCertifications} maxLength={1600} onChange={(event) => updateCandidateProfile("educationCertifications", event.target.value)} placeholder="Degrees, dates, certifications, coursework, and training you have confirmed." /></label>
+            <label className="field profile-contact-field"><span>Optional contact details</span><textarea value={candidateProfile.contactDetails} maxLength={800} onChange={(event) => updateCandidateProfile("contactDetails", event.target.value)} placeholder="Name, location, email, phone, portfolio, or LinkedIn details to reuse in application documents." /></label>
+          </div>}
+          {candidateProfileStatus && <p className="studio-status" role="status">{candidateProfileStatus}</p>}
+        </section>
+
         <section className="resume-studio-columns">
           <div className="resume-review-column">
             <article className="panel studio-panel resume-source-panel">
@@ -437,7 +515,7 @@ export default function ResumeStudio() {
 
             <article className="panel studio-panel resume-result-panel cover-result-panel">
               <div className="panel-header"><div><p className="section-label">AI cover letter</p><h2>{coverResult?.headline || "Your tailored letter"}</h2></div></div>
-              {!coverResult ? <EmptyResult text="The letter will use only facts from your resume and align them with this job posting." /> : <CoverLetterView result={coverResult} onCopy={copyCoverLetter} onDownload={downloadCover} />}
+              {!coverResult ? <EmptyResult text="The letter will use only facts from your resume and Candidate Profile, then align them with this job posting." /> : <CoverLetterView result={coverResult} onCopy={copyCoverLetter} onDownload={downloadCover} />}
               {!!coverVersions.length && <section className="cover-version-list"><h3>Saved versions</h3>{coverVersions.map((version, index) => <button className={version.result === coverResult ? "active" : ""} type="button" key={version.id} onClick={() => { setCoverResult(version.result); setCoverTone(version.tone); }}><span>Version {coverVersions.length - index} · {formatTone(version.tone)}</span><small>{formatMemoryDate(version.createdAt)}</small></button>)}</section>}
             </article>
           </div>
@@ -455,7 +533,7 @@ function ReviewResultView({ result, onCopy }: { result: ResumeResult; onCopy: (v
     <KeywordList items={result.atsKeywords} />
     <div className="result-two-column"><ResultList title="What already works" items={result.strengths} /><ResultList title="Gaps to address" items={result.gaps} /></div>
     <ResultList title="Highest-impact next steps" items={result.nextSteps} />
-    {!!result.changes?.length && <section className="targeted-changes-section"><div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><button className="small-action-button" type="button" onClick={() => onCopy(result.changes!.map((change) => `${change.section}: ${change.suggestion}\nExample: ${change.example}`).join("\n\n"), "All targeted changes copied.")}>Copy all</button></div>{result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}><div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your input" : "Safe rewrite"}</span></div>{change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}{change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}{change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>{change.example && <div><strong>Example</strong><p>{change.example}</p><button className="small-action-button" type="button" onClick={() => onCopy(change.example, `${change.section} example copied.`)}>Copy example</button></div>}</section>)}</section>}
+    {!!result.changes?.length && <section className="targeted-changes-section"><div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><button className="small-action-button" type="button" onClick={() => onCopy(result.changes!.map((change) => `${formatOperation(change.operation)} — ${change.section}\nWhere: ${change.placement}\nChange: ${change.suggestion}\nExample: ${change.example}`).join("\n\n"), "All targeted changes copied.")}>Copy all</button></div>{result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}><div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your confirmation" : "Uses confirmed evidence"}</span></div><div className="change-placement"><span>{formatOperation(change.operation)}</span><p><strong>Where:</strong> {change.placement || `In the ${change.section} section`}</p></div>{change.sourceEvidence && <p className="source-evidence"><strong>{change.operation === "replace" ? "Replace this text:" : change.operation === "move" ? "Move this text:" : "Confirmed evidence:"}</strong> “{change.sourceEvidence}”</p>}{change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}{change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}{change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>{change.example && <div><strong>Example</strong><p>{change.example}</p><button className="small-action-button" type="button" onClick={() => onCopy(change.example, `${change.section} example copied.`)}>Copy example</button></div>}</section>)}</section>}
   </div>;
 }
 
@@ -471,6 +549,7 @@ function formatMemoryDate(value: number) { return new Intl.DateTimeFormat(undefi
 function formatRoleLevel(value: string) { return value === "internship" ? "Internship" : value === "entry" ? "Entry level" : value === "mid" ? "Mid level" : "Senior level"; }
 function formatTone(value: CoverTone) { return value === "concise" ? "Concise" : value === "conversational" ? "Conversational" : "Professional"; }
 function capitalize(value: string) { return value.charAt(0).toUpperCase() + value.slice(1); }
+function formatOperation(value?: Change["operation"]) { return value === "replace" ? "Replace" : value === "move" ? "Move" : "Add"; }
 function formatRelativeTime(value: number) { const seconds = Math.max(0, Math.round((Date.now() - value) / 1000)); return seconds < 10 ? "just now" : seconds < 60 ? `${seconds}s ago` : `${Math.round(seconds / 60)}m ago`; }
 function safeFileName(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cover-letter"; }
 function downloadBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url); }
