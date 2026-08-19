@@ -44,6 +44,8 @@ Times New Roman 12-point DOCX export.
 - Saves up to 24 coding challenges in device-local browser storage, including
   reasoning notes, code, tests, coaching, progress, and
   final reviews, with restore and confirmed delete controls
+- Automatically migrates compatible challenges saved before the five-language
+  runner was introduced by inferring their test input and output contracts
 - Runs JavaScript inside a restricted browser iframe and executes Python, Java,
   C#, and Rust through the free Wandbox sandbox behind the rate-limited Azure API
 - Provides IDE-style coding controls with Tab/Shift+Tab indentation, automatic

@@ -13,6 +13,13 @@ test("main sidebar keeps all three product destinations visible", async ({ page 
   expect(sidebarBox).not.toBeNull();
   expect(resumeBox).not.toBeNull();
   expect(resumeBox!.x + resumeBox!.width).toBeLessThanOrEqual(sidebarBox!.x + sidebarBox!.width);
+  const heroActions = page.locator(".hero-actions");
+  const codingCta = heroActions.getByRole("link", { name: "Open Coding Practice" });
+  const resumeCta = heroActions.getByRole("link", { name: "Open Resume Studio" });
+  await expect(codingCta).toBeVisible();
+  await expect(resumeCta).toBeVisible();
+  const [codingBox, resumeCtaBox] = await Promise.all([codingCta.boundingBox(), resumeCta.boundingBox()]);
+  expect(codingBox!.x).toBeLessThan(resumeCtaBox!.x);
 });
 
 test("Resume Studio completes and remembers a tailored application", async ({ page }) => {
@@ -143,4 +150,52 @@ test("Coding Practice gates progression on passing tests and unlocks support aft
   await page.getByRole("button", { name: "Open challenge" }).click();
   await expect(page.getByRole("heading", { name: "Count unique tags", level: 2 })).toBeVisible();
   await expect(page.getByText("Correct, concise, and appropriate for the constraints.")).toBeVisible();
+});
+
+test("Coding Practice migrates pre-runner saved challenges", async ({ page }) => {
+  const legacyChallenge = {
+    id: "legacy-python-challenge",
+    savedAt: "2026-08-01T12:00:00.000Z",
+    language: "python",
+    difficulty: "beginner",
+    topic: "maps-sets",
+    roleContext: "",
+    challenge: {
+      title: "Count unique tags",
+      goal: "Practice sets.",
+      prompt: "Return the number of unique strings.",
+      examples: ['["api", "ui", "api"] returns 2'],
+      constraints: ["The input may be empty.", "Values are strings."],
+      concepts: ["sets"],
+      tests: [
+        { input: ["api", "ui", "api"], expected: 2 },
+        { input: [], expected: 0 },
+        { input: ["api"], expected: 1 },
+      ],
+      language: "python",
+      difficulty: "beginner",
+      topic: "maps-sets",
+    },
+    activeStep: 4,
+    notes: {},
+    coachFeedback: {},
+    code: "def solution(input):\n    return len(set(input))",
+    testResults: [],
+    finalReview: null,
+    failedAttempts: 0,
+  };
+  await page.addInitScript((saved) => window.localStorage.setItem("interviewiq-coding-practice-history-v1", JSON.stringify([saved])), legacyChallenge);
+  await page.route("**/api/code-runner", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.inputType).toBe("string-array");
+    expect(body.outputType).toBe("integer");
+    await route.fulfill({ json: { results: body.tests.map((item: { expected: unknown }) => ({ passed: true, expected: item.expected })), error: "" } });
+  });
+
+  await page.goto("/coding/");
+  await page.getByRole("button", { name: "Open challenge" }).click();
+  await expect(page.getByRole("heading", { name: "Count unique tags", level: 2 })).toBeVisible();
+  await page.getByRole("button", { name: /Code/ }).click();
+  await page.getByRole("button", { name: "Run 3 tests" }).click();
+  await expect(page.getByRole("heading", { name: "All tests passed—next step unlocked" })).toBeVisible();
 });
