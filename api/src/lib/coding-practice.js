@@ -4,6 +4,11 @@ export const codingLanguages = new Set(["javascript", "python", "java", "csharp"
 export const codingDifficulties = new Set(["beginner", "intermediate", "advanced"]);
 export const codingTopics = new Set(["arrays-strings", "maps-sets", "stacks-queues", "sorting-search", "recursion-dp", "practical-data"]);
 export const coachingStages = new Set(["understand", "edge-cases", "approach", "pseudocode", "implementation", "testing", "complexity"]);
+export const codingChallengeContextLimit = 6000;
+
+export function codingChallengeContext(value) {
+  return text(value, codingChallengeContextLimit);
+}
 
 function safeJsonValue(value) {
   try {

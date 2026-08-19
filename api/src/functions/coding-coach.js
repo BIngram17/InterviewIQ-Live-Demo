@@ -1,6 +1,6 @@
 import { app } from "@azure/functions";
 import { ApiError, arrayOfText, completeJson, readBody, text, withApi } from "../lib/ai.js";
-import { coachingStages, codingLanguages } from "../lib/coding-practice.js";
+import { coachingStages, codingChallengeContext, codingLanguages } from "../lib/coding-practice.js";
 
 app.http("codingCoach", {
   methods: ["POST"],
@@ -10,7 +10,7 @@ app.http("codingCoach", {
     const body = await readBody(request);
     const language = codingLanguages.has(body.language) ? body.language : "javascript";
     const stage = coachingStages.has(body.stage) ? body.stage : "understand";
-    const challenge = text(body.challenge, 2200);
+    const challenge = codingChallengeContext(body.challenge);
     const work = text(body.work, 5000);
     if (!challenge || work.length < 8) throw new ApiError(400, "Add your thinking for this step before asking the coach.");
 

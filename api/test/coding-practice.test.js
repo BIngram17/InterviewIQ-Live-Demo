@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { codingLanguages, validateChallenge } from "../src/lib/coding-practice.js";
+import { codingChallengeContext, codingChallengeContextLimit, codingLanguages, validateChallenge } from "../src/lib/coding-practice.js";
 
 test("supports all five coding-practice languages", () => {
   assert.deepEqual([...codingLanguages], ["javascript", "python", "java", "csharp", "rust"]);
@@ -35,4 +35,11 @@ test("rejects incomplete challenges and oversized test values", () => {
     constraints: ["One", "Two"],
     tests: [{ input: huge, expected: 1 }, { input: 2, expected: 2 }, { input: 3, expected: 3 }],
   }), null);
+});
+
+test("preserves a complete maximum-sized generated challenge for coaching", () => {
+  const fullChallenge = `${"Prompt detail. ".repeat(390)}Final requirement: focus on the count.`;
+  assert.ok(fullChallenge.length < codingChallengeContextLimit);
+  assert.equal(codingChallengeContext(fullChallenge), fullChallenge);
+  assert.match(codingChallengeContext(fullChallenge), /focus on the count\.$/);
 });

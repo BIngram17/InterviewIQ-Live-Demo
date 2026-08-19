@@ -1,5 +1,6 @@
 import { app } from "@azure/functions";
 import { ApiError, arrayOfText, completeJson, readBody, text, withApi } from "../lib/ai.js";
+import { codingChallengeContext } from "../lib/coding-practice.js";
 
 app.http("codeFeedback", {
   methods: ["POST"],
@@ -8,7 +9,7 @@ app.http("codeFeedback", {
   handler: withApi(async (request) => {
     const body = await readBody(request);
     const language = ["javascript", "python", "java", "csharp", "rust"].includes(body.language) ? body.language : "";
-    const challenge = text(body.challenge, 1400);
+    const challenge = codingChallengeContext(body.challenge);
     const code = typeof body.code === "string" ? body.code.slice(0, 12000) : "";
     const testSummary = text(body.testSummary, 500);
 
