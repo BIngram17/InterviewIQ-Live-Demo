@@ -14,6 +14,7 @@ type CodingTest = { input: unknown; expected: unknown };
 type Challenge = { title: string; goal: string; prompt: string; examples: string[]; constraints: string[]; concepts: string[]; tests: CodingTest[]; language: CodeLanguage; difficulty: Difficulty; topic: Topic };
 type CoachFeedback = { assessment: string; whatWorks: string[]; nextActions: string[]; hint: string };
 type FinalReview = { score: number; verdict: string; strengths: string[]; improvements: string[]; complexity: string; suggestedCode: string };
+type SolutionWalkthrough = { approach: string; pseudocode: string; code: string; complexity: string; pitfalls: string[] };
 type TestResult = { passed: boolean; actual?: unknown; expected?: unknown; error?: string };
 
 const storageKey = "interviewiq-coding-practice-v1";
@@ -60,9 +61,14 @@ export default function CodingPracticePage() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [runnerError, setRunnerError] = useState("");
   const [finalReview, setFinalReview] = useState<FinalReview | null>(null);
+  const [reviewError, setReviewError] = useState("");
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [solutionWalkthrough, setSolutionWalkthrough] = useState<SolutionWalkthrough | null>(null);
+  const [solutionError, setSolutionError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCoaching, setIsCoaching] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [isLoadingSolution, setIsLoadingSolution] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
@@ -91,6 +97,8 @@ export default function CodingPracticePage() {
         setCode(typeof parsed.code === "string" ? parsed.code : starterFor(parsed.language || "javascript"));
         setTestResults(Array.isArray(parsed.testResults) ? parsed.testResults : []);
         setFinalReview(parsed.finalReview && typeof parsed.finalReview === "object" ? parsed.finalReview : null);
+        setFailedAttempts(Number.isInteger(parsed.failedAttempts) ? Math.max(0, Math.min(20, parsed.failedAttempts)) : 0);
+        setSolutionWalkthrough(parsed.solutionWalkthrough && typeof parsed.solutionWalkthrough === "object" ? parsed.solutionWalkthrough : null);
       }
     } catch {
       window.localStorage.removeItem(storageKey);
@@ -103,13 +111,13 @@ export default function CodingPracticePage() {
     if (!isLoaded || !challenge) return;
     const timeout = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify({ language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, testResults, finalReview }));
+        window.localStorage.setItem(storageKey, JSON.stringify({ language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, testResults, finalReview, failedAttempts, solutionWalkthrough }));
       } catch {
         setStatus("Progress could not be saved because browser storage is full.");
       }
     }, 450);
     return () => window.clearTimeout(timeout);
-  }, [activeStep, challenge, coachFeedback, code, difficulty, finalReview, isLoaded, language, notes, roleContext, testResults, topic]);
+  }, [activeStep, challenge, coachFeedback, code, difficulty, failedAttempts, finalReview, isLoaded, language, notes, roleContext, solutionWalkthrough, testResults, topic]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -120,6 +128,9 @@ export default function CodingPracticePage() {
       setRunnerError(error);
       setTestResults(results);
       setIsRunning(false);
+      if (error || results.some((result: TestResult) => !result.passed)) {
+        setFailedAttempts((value) => Math.min(20, value + 1));
+      }
       setStatus(error || `${results.filter((result: TestResult) => result.passed).length}/${challenge?.tests.length || 0} browser tests passed.`);
     };
     window.addEventListener("message", onMessage);
@@ -159,6 +170,10 @@ export default function CodingPracticePage() {
       setTestResults([]);
       setRunnerError("");
       setFinalReview(null);
+      setReviewError("");
+      setFailedAttempts(0);
+      setSolutionWalkthrough(null);
+      setSolutionError("");
       setActiveStep(0);
       window.localStorage.setItem(recentTitlesKey, JSON.stringify([payload.title, ...(Array.isArray(savedTitles) ? savedTitles : [])].slice(0, 12)));
       setStatus("A fresh guided challenge is ready.");
@@ -175,6 +190,10 @@ export default function CodingPracticePage() {
     setTestResults([]);
     setRunnerError("");
     setFinalReview(null);
+    setReviewError("");
+    setFailedAttempts(0);
+    setSolutionWalkthrough(null);
+    setSolutionError("");
     setStatus(`${languageLabel(next)} selected. Generate a new challenge or continue this language-neutral problem.`);
   };
 
@@ -224,6 +243,7 @@ export default function CodingPracticePage() {
       activeRunRef.current = "";
       setIsRunning(false);
       setRunnerError("Execution stopped after 2 seconds. Check for an infinite loop.");
+      setFailedAttempts((value) => Math.min(20, value + 1));
       setRunnerKey((value) => value + 1);
     }, 2000);
   };
@@ -232,20 +252,63 @@ export default function CodingPracticePage() {
     if (!challenge) return;
     setIsReviewing(true);
     setStatus("");
+    setReviewError("");
     try {
       const passed = testResults.filter((result) => result.passed).length;
       const testSummary = language === "javascript" ? runnerError || (testResults.length ? `${passed}/${challenge.tests.length} browser tests passed` : "Browser tests not run") : notes.testing || "Static review only; no local runtime used.";
       const response = await fetch("/api/code-feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language, challenge: challengeText(challenge), code, testSummary }) });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload) throw new Error(payload?.error || "Final AI review is unavailable.");
+      if (!Number.isFinite(Number(payload.score)) || !payload.verdict || !Array.isArray(payload.strengths) || !Array.isArray(payload.improvements) || !payload.complexity || !payload.suggestedCode) {
+        throw new Error("The AI returned an incomplete review. Please try again.");
+      }
       setFinalReview(payload);
+      if (Number(payload.score) < 7) setFailedAttempts((value) => Math.min(20, value + 1));
       setActiveStep(stages.length - 1);
       setStatus("Your final coding review is ready.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Final AI review is unavailable.");
+      const message = error instanceof Error ? error.message : "Final AI review is unavailable.";
+      setReviewError(message);
+      setStatus(message);
     } finally {
       setIsReviewing(false);
     }
+  };
+
+  const requestSolution = async () => {
+    if (!challenge || failedAttempts < 3) return;
+    setIsLoadingSolution(true);
+    setSolutionError("");
+    try {
+      const response = await fetch("/api/coding-solution", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language, challenge: challengeText(challenge), failedAttempts }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload) throw new Error(payload?.error || "The solution walkthrough is unavailable.");
+      if (!payload.approach || !payload.pseudocode || !payload.code || !payload.complexity || !Array.isArray(payload.pitfalls)) {
+        throw new Error("The AI returned an incomplete solution walkthrough. Please try again.");
+      }
+      setSolutionWalkthrough(payload);
+      setStatus("The complete solution walkthrough is ready.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The solution walkthrough is unavailable.";
+      setSolutionError(message);
+      setStatus(message);
+    } finally {
+      setIsLoadingSolution(false);
+    }
+  };
+
+  const startNewChallenge = () => {
+    setChallenge(null);
+    setStatus("");
+    setReviewError("");
+    setFailedAttempts(0);
+    setSolutionWalkthrough(null);
+    setSolutionError("");
+    window.localStorage.removeItem(storageKey);
   };
 
   const current = stages[activeStep];
@@ -264,7 +327,7 @@ export default function CodingPracticePage() {
         <section className="studio-hero coding-hero"><div><p className="eyebrow">Guided coding practice</p><h1>Learn how to solve—not just what to type.</h1><p>Work from prompt comprehension through planning, implementation, testing, complexity analysis, and an evidence-based AI review.</p></div><div className="hero-card"><span className="status-dot" /><div><p className="hero-card-label">Safe live demo</p><p className="hero-card-value">5 languages · browser-sandboxed JavaScript</p></div></div></section>
 
         <section className="panel coding-setup-panel">
-          <div className="panel-header"><div><p className="section-label">Challenge setup</p><h2>Choose what to practice</h2></div>{challenge && <button className="ghost-button" type="button" onClick={() => { setChallenge(null); setStatus(""); window.localStorage.removeItem(storageKey); }}>Start new</button>}</div>
+          <div className="panel-header"><div><p className="section-label">Challenge setup</p><h2>Choose what to practice</h2></div>{challenge && <button className="ghost-button" type="button" onClick={startNewChallenge}>Start new</button>}</div>
           <div className="coding-setup-grid">
             <label className="field"><span>Language</span><select value={language} onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}>{languages.map((item) => <option value={item} key={item}>{languageLabel(item)}</option>)}</select></label>
             <label className="field"><span>Difficulty</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty)}><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
@@ -298,13 +361,21 @@ export default function CodingPracticePage() {
                 <div className="code-actions"><button className="ghost-button" type="button" onClick={() => { setCode(starterFor(language)); setFinalReview(null); }}>Reset code</button><CopyButton text={code} label="Copy code" copiedLabel="Code copied" /></div>
               </div> : current.id === "review" ? <div className="final-review-step">
                 <button className="primary-button" type="button" onClick={requestFinalReview} disabled={isReviewing}>{isReviewing ? "Reviewing your complete solution…" : finalReview ? "Regenerate final AI review" : "Get final AI review"}</button>
-                {!finalReview ? <div className="coaching-placeholder"><strong>Finish when you are ready</strong><p>The coach will assess correctness, edge cases, complexity, readability, and language conventions. JavaScript test results are included automatically.</p></div> : <div className="final-code-review"><div className="final-review-score"><strong>{finalReview.score.toFixed(1)}</strong><span>out of 10</span></div><section><h3>Assessment</h3><p>{finalReview.verdict}</p></section><section><h3>What works</h3><ul>{finalReview.strengths.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>What to improve</h3><ul>{finalReview.improvements.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>Complexity</h3><p>{finalReview.complexity}</p></section><section><div className="result-section-header"><h3>Suggested {languageLabel(language)} solution</h3><CopyButton text={finalReview.suggestedCode} label="Copy solution" copiedLabel="Solution copied" /></div><pre><code>{finalReview.suggestedCode}</code></pre></section></div>}
+                {reviewError && <div className="inline-action-error" role="alert"><strong>Review could not be completed</strong><p>{reviewError}</p><button className="ghost-button" type="button" onClick={requestFinalReview}>Try final review again</button></div>}
+                {!finalReview ? <div className="coaching-placeholder"><strong>Finish when you are ready</strong><p>The coach will assess correctness, edge cases, complexity, readability, and language conventions. JavaScript test results are included automatically.</p></div> : <div className="final-code-review"><div className="final-review-score"><strong>{finalReview.score.toFixed(1)}</strong><span>out of 10</span></div><section><h3>Assessment</h3><p>{finalReview.verdict}</p></section><section><h3>What works</h3><ul>{finalReview.strengths.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>What to improve</h3><ul>{finalReview.improvements.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>Complexity</h3><p>{finalReview.complexity}</p></section>{finalReview.score >= 7 || failedAttempts >= 3 ? <section><div className="result-section-header"><h3>Suggested {languageLabel(language)} solution</h3><CopyButton text={finalReview.suggestedCode} label="Copy solution" copiedLabel="Solution copied" /></div><pre><code>{finalReview.suggestedCode}</code></pre></section> : <section className="coaching-placeholder"><strong>Keep iterating before viewing the answer</strong><p>Your review is available now. The complete solution unlocks after three unsuccessful attempts so you can apply the feedback first.</p></section>}</div>}
               </div> : <>
                 <label className="field guided-notes-field"><span>Your work</span><textarea value={notes[current.id] || ""} maxLength={5000} onChange={(event) => { setNotes((value) => ({ ...value, [current.id]: event.target.value })); setCoachFeedback((value) => { const next = { ...value }; delete next[current.id]; return next; }); }} placeholder={current.placeholder} /></label>
                 {current.id === "testing" && <div className="testing-controls">{language === "javascript" ? <button className="primary-button" type="button" onClick={runTests} disabled={isRunning}>{isRunning ? "Running browser tests…" : `Run ${challenge.tests.length} browser tests`}</button> : <p className="privacy-note">{languageLabel(language)} is reviewed as inert text in this public demo. Document your predicted tests here, then use the AI coach and final review.</p>}{(testResults.length > 0 || runnerError) && <div className={`test-report ${runnerError || passed < challenge.tests.length ? "tests-failed" : "tests-passed"}`} role="status"><strong>{runnerError || `${passed}/${challenge.tests.length} tests passed`}</strong>{!runnerError && testResults.map((result, index) => <span key={index}>{result.passed ? "✓" : "×"} Test {index + 1}{result.error ? `: ${result.error}` : ""}</span>)}</div>}</div>}
                 <button className="primary-button step-coach-button" type="button" onClick={() => requestStepCoaching(current.id as CoachingStage)} disabled={isCoaching}>{isCoaching ? "Coach is reviewing this step…" : currentFeedback ? "Regenerate step coaching" : "Get coaching on this step"}</button>
                 {!currentFeedback ? <div className="coaching-placeholder"><strong>Think first, then ask for help</strong><p>The coach responds to your reasoning, corrects misconceptions, and gives a focused hint without skipping the learning process.</p></div> : <div className="step-coaching-result"><section><h3>Coach assessment</h3><p>{currentFeedback.assessment}</p></section><section><h3>What works</h3><ul>{currentFeedback.whatWorks.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>Next actions</h3><ul>{currentFeedback.nextActions.map((item) => <li key={item}>{item}</li>)}</ul></section><section className="coach-hint"><div className="result-section-header"><h3>Focused hint</h3><CopyButton text={currentFeedback.hint} label="Copy hint" copiedLabel="Hint copied" /></div><p>{currentFeedback.hint}</p></section></div>}
               </>}
+
+              {activeStep >= 4 && <section className={`solution-unlock-card ${failedAttempts >= 3 ? "unlocked" : ""}`}>
+                <div><p className="section-label">Stuck protection</p><h3>{solutionWalkthrough ? "Complete solution walkthrough" : failedAttempts >= 3 ? "The complete answer is unlocked" : "Keep trying—the answer will unlock"}</h3><p>{solutionWalkthrough ? "Compare this reasoning with your approach, then rewrite the solution in your own words." : `${Math.min(failedAttempts, 3)} of 3 unsuccessful attempts recorded. Failed JavaScript test runs and AI reviews below 7/10 count as attempts.`}</p></div>
+                {!solutionWalkthrough && <button className="ghost-button" type="button" disabled={failedAttempts < 3 || isLoadingSolution} onClick={requestSolution}>{isLoadingSolution ? "Building the walkthrough…" : failedAttempts >= 3 ? "Show complete solution" : `${3 - failedAttempts} more ${3 - failedAttempts === 1 ? "attempt" : "attempts"} needed`}</button>}
+                {solutionError && <div className="inline-action-error" role="alert"><strong>Solution could not be loaded</strong><p>{solutionError}</p><button className="ghost-button" type="button" onClick={requestSolution}>Try again</button></div>}
+                {solutionWalkthrough && <div className="solution-walkthrough"><section><h4>Reasoning</h4><p>{solutionWalkthrough.approach}</p></section><section><h4>Pseudocode</h4><pre><code>{solutionWalkthrough.pseudocode}</code></pre></section><section><div className="result-section-header"><h4>Complete {languageLabel(language)} solution</h4><CopyButton text={solutionWalkthrough.code} label="Copy solution" copiedLabel="Solution copied" /></div><pre><code>{solutionWalkthrough.code}</code></pre></section><section><h4>Complexity</h4><p>{solutionWalkthrough.complexity}</p></section><section><h4>Common pitfalls</h4><ul>{solutionWalkthrough.pitfalls.map((item) => <li key={item}>{item}</li>)}</ul></section></div>}
+              </section>}
 
               <div className="guided-step-actions"><button className="ghost-button" type="button" disabled={activeStep === 0} onClick={() => setActiveStep((value) => Math.max(0, value - 1))}>← Previous</button><button className="primary-button" type="button" disabled={activeStep === stages.length - 1} onClick={() => setActiveStep((value) => Math.min(stages.length - 1, value + 1))}>Next step →</button></div>
             </article>

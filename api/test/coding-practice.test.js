@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { codingChallengeContext, codingChallengeContextLimit, codingLanguages, validateChallenge } from "../src/lib/coding-practice.js";
+import { codingChallengeContext, codingChallengeContextLimit, codingLanguages, validateChallenge, validateSolutionWalkthrough } from "../src/lib/coding-practice.js";
 
 test("supports all five coding-practice languages", () => {
   assert.deepEqual([...codingLanguages], ["javascript", "python", "java", "csharp", "rust"]);
@@ -42,4 +42,16 @@ test("preserves a complete maximum-sized generated challenge for coaching", () =
   assert.ok(fullChallenge.length < codingChallengeContextLimit);
   assert.equal(codingChallengeContext(fullChallenge), fullChallenge);
   assert.match(codingChallengeContext(fullChallenge), /focus on the count\.$/);
+});
+
+test("validates a complete teaching-oriented solution walkthrough", () => {
+  const result = validateSolutionWalkthrough({
+    approach: "Count each value with a set and return the set size.",
+    pseudocode: "create an empty set; add every value; return its size",
+    code: "function solution(input) { return new Set(input).size; }",
+    complexity: "O(n) expected time and O(n) space.",
+    pitfalls: ["Forgetting that an empty input returns zero."],
+  });
+  assert.equal(result?.pitfalls.length, 1);
+  assert.equal(validateSolutionWalkthrough({ approach: "Incomplete" }), null);
 });

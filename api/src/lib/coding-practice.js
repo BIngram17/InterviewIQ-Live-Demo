@@ -10,6 +10,17 @@ export function codingChallengeContext(value) {
   return text(value, codingChallengeContextLimit);
 }
 
+export function validateSolutionWalkthrough(value) {
+  if (!value || typeof value !== "object") return null;
+  const approach = text(value.approach, 1200);
+  const pseudocode = text(value.pseudocode, 1600);
+  const code = typeof value.code === "string" ? value.code.slice(0, 12000).trim() : "";
+  const complexity = text(value.complexity, 700);
+  const pitfalls = arrayOfText(value.pitfalls, 6, 280);
+  if (!approach || !pseudocode || !code || !complexity || !pitfalls.length) return null;
+  return { approach, pseudocode, code, complexity, pitfalls };
+}
+
 function safeJsonValue(value) {
   try {
     const serialized = JSON.stringify(value);

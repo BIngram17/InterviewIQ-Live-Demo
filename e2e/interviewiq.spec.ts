@@ -73,6 +73,21 @@ test("Coding Practice supports five languages, free step navigation, and copy co
     difficulty: "intermediate",
     topic: "maps-sets",
   } }));
+  await page.route("**/api/coding-solution", (route) => route.fulfill({ json: {
+    approach: "Use a set because it retains one copy of each tag.",
+    pseudocode: "create a set from input\nreturn the set size",
+    code: "function solution(input) { return new Set(input).size; }",
+    complexity: "O(n) expected time and O(n) space.",
+    pitfalls: ["Do not count duplicate tags more than once."],
+  } }));
+  await page.route("**/api/code-feedback", (route) => route.fulfill({ json: {
+    score: 9,
+    verdict: "Correct, concise, and appropriate for the constraints.",
+    strengths: ["Uses the right data structure."],
+    improvements: ["Explain the expected set-operation cost."],
+    complexity: "O(n) expected time and O(n) space.",
+    suggestedCode: "function solution(input) { return new Set(input).size; }",
+  } }));
 
   await page.goto("/coding/");
   await expect(page.getByRole("navigation", { name: "InterviewIQ tools" })).toContainText("Coding Practice");
@@ -93,4 +108,16 @@ test("Coding Practice supports five languages, free step navigation, and copy co
   await editor.press("Enter");
   await editor.press("Tab");
   await expect(editor).toHaveValue(/\n  $/);
+  await editor.fill("function solution(input) { return 0; }");
+  await page.getByRole("button", { name: /Testing/ }).click();
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.getByRole("button", { name: "Run 3 browser tests" }).click();
+    await expect(page.getByText(`${attempt} of 3 unsuccessful attempts recorded.`, { exact: false })).toBeVisible();
+  }
+  await expect(page.getByText("3 of 3 unsuccessful attempts recorded.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Show complete solution" }).click();
+  await expect(page.getByRole("heading", { name: "Complete solution walkthrough" })).toBeVisible();
+  await page.getByRole("button", { name: /Review/ }).click();
+  await page.getByRole("button", { name: "Get final AI review" }).click();
+  await expect(page.getByText("Correct, concise, and appropriate for the constraints.")).toBeVisible();
 });

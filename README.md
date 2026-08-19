@@ -38,6 +38,9 @@ Times New Roman 12-point DOCX export.
 - Guides learners through understanding the prompt, identifying edge cases,
   planning, pseudocode, implementation, testing, complexity, and final review,
   with free step navigation and visible progress
+- Tracks unsuccessful test and review attempts, then unlocks an AI-generated
+  reasoning, pseudocode, code, complexity, and pitfalls walkthrough after three
+  attempts
 - Autosaves the current coding challenge, reasoning notes, code, tests, and
   coaching feedback in device-local browser storage
 - Runs JavaScript tests inside a restricted browser iframe and automatically
@@ -114,6 +117,7 @@ credential never enters client-side code.
 | `POST /api/feedback` | Score and coach a behavioral or technical answer |
 | `POST /api/coding-challenge` | Generate a language-, difficulty-, and topic-specific coding challenge |
 | `POST /api/coding-coach` | Coach the learner at one reasoning or implementation stage |
+| `POST /api/coding-solution` | Unlock a complete teaching walkthrough after three unsuccessful attempts |
 | `POST /api/code-feedback` | Review JavaScript, Python, Java, C#, or Rust code as text |
 | `POST /api/job-import` | Safely fetch a public posting and extract structured job details |
 | `POST /api/resume-extract` | Extract bounded plain text from an uploaded PDF, DOCX, or TXT resume |

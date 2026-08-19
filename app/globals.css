@@ -360,6 +360,21 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .final-review-score { display:flex; align-items:baseline; justify-content:center; gap:7px; padding:16px; border-radius:18px; color:white; background:linear-gradient(135deg,var(--brand-purple),var(--brand-blue)); }
 .final-review-score strong { font-size:2rem; }
 .final-code-review pre { max-width:100%; margin:12px 0 0; padding:16px; overflow:auto; border-radius:14px; color:#dbeafe; background:#07101f; }
+.inline-action-error { display:grid; justify-items:start; gap:7px; padding:14px 16px; border:1px solid rgba(248,113,113,.4); border-radius:15px; color:#fecaca; background:rgba(127,29,29,.16); }
+.inline-action-error p { margin:0; color:inherit; line-height:1.5; }
+.inline-action-error .ghost-button { width:auto; }
+:root[data-theme="light"] .inline-action-error { color:#991b1b; background:#fef2f2; }
+.solution-unlock-card { display:grid; gap:14px; min-width:0; padding:18px; border:1px solid var(--border-soft); border-radius:19px; background:rgba(148,163,184,.06); }
+.solution-unlock-card.unlocked { border-color:rgba(34,197,94,.32); background:linear-gradient(145deg,rgba(34,197,94,.08),rgba(14,165,233,.07)); }
+.solution-unlock-card h3 { margin:3px 0 5px; }
+.solution-unlock-card > div > p:last-child { margin:0; color:var(--text-soft); line-height:1.55; }
+.solution-unlock-card > .ghost-button { width:min(100%,300px); }
+.solution-walkthrough { display:grid; gap:12px; min-width:0; }
+.solution-walkthrough section { min-width:0; padding:15px; border:1px solid var(--border-soft); border-radius:15px; background:rgba(255,255,255,.05); }
+.solution-walkthrough h4 { margin:0 0 8px; }
+.solution-walkthrough p { margin:0; color:var(--text-soft); line-height:1.6; overflow-wrap:anywhere; }
+.solution-walkthrough ul { display:grid; gap:7px; margin:0; padding-left:20px; color:var(--text-soft); }
+.solution-walkthrough pre { max-width:100%; margin:0; padding:14px; overflow:auto; border-radius:13px; color:#dbeafe; background:#07101f; white-space:pre-wrap; overflow-wrap:anywhere; }
 .guided-step-actions { display:flex; justify-content:space-between; gap:12px; padding-top:18px; border-top:1px solid var(--border-soft); }
 .guided-step-actions button { width:auto; min-width:145px; }
 .studio-shell { width:min(1440px,calc(100% - 32px)); margin:0 auto; padding:34px 0 56px; }
