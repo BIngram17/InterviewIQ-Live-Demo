@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CopyButton from "../components/CopyButton";
 import ProductSwitcher from "../components/ProductSwitcher";
 import { applyCodeEditorKey } from "../lib/code-editor";
@@ -16,9 +16,28 @@ type CoachFeedback = { assessment: string; whatWorks: string[]; nextActions: str
 type FinalReview = { score: number; verdict: string; strengths: string[]; improvements: string[]; complexity: string };
 type SolutionWalkthrough = { approach: string; pseudocode: string; code: string; complexity: string; pitfalls: string[] };
 type TestResult = { passed: boolean; actual?: unknown; expected?: unknown; error?: string };
+type SavedCodingChallenge = {
+  id: string;
+  savedAt: string;
+  language: CodeLanguage;
+  difficulty: Difficulty;
+  topic: Topic;
+  roleContext: string;
+  challenge: Challenge;
+  activeStep: number;
+  notes: Record<string, string>;
+  coachFeedback: Record<string, CoachFeedback>;
+  code: string;
+  testResults: TestResult[];
+  finalReview: FinalReview | null;
+  failedAttempts: number;
+  solutionWalkthrough: SolutionWalkthrough | null;
+};
 
 const storageKey = "interviewiq-coding-practice-v1";
 const recentTitlesKey = "interviewiq-coding-practice-titles-v1";
+const savedChallengesKey = "interviewiq-coding-practice-history-v1";
+const maxSavedChallenges = 24;
 const languages: CodeLanguage[] = ["javascript", "python", "java", "csharp", "rust"];
 const stages: Array<{ id: CoachingStage | "review"; number: string; title: string; short: string; guidance: string; placeholder: string }> = [
   { id: "understand", number: "01", title: "Understand the problem", short: "Understand", guidance: "Restate the task in your own words. Identify the exact result the function must return before thinking about code.", placeholder: "In my own words, this problem asks me to…\nThe function receives…\nIt should return…" },
@@ -47,6 +66,26 @@ function challengeText(challenge: Challenge) {
   return `${challenge.title}\n${challenge.prompt}\nExamples:\n${challenge.examples.join("\n")}\nConstraints:\n${challenge.constraints.join("\n")}`;
 }
 
+function newPracticeId() {
+  return globalThis.crypto?.randomUUID?.() || `coding-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function formatSavedDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Recently saved" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function savedProgress(saved: SavedCodingChallenge) {
+  let completed = 0;
+  stages.forEach((stage) => {
+    if (stage.id === "implementation" && saved.code.trim().length > starterFor(saved.language).trim().length + 10) completed += 1;
+    else if (stage.id === "testing" && (saved.testResults.length || saved.notes.testing?.trim())) completed += 1;
+    else if (stage.id === "review" && saved.finalReview) completed += 1;
+    else if (stage.id !== "implementation" && stage.id !== "review" && saved.notes[stage.id]?.trim()) completed += 1;
+  });
+  return completed;
+}
+
 export default function CodingPracticePage() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [language, setLanguage] = useState<CodeLanguage>("javascript");
@@ -72,6 +111,8 @@ export default function CodingPracticePage() {
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
+  const [practiceId, setPracticeId] = useState("");
+  const [savedChallenges, setSavedChallenges] = useState<SavedCodingChallenge[]>([]);
   const [runnerKey, setRunnerKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const activeRunRef = useRef("");
@@ -81,11 +122,15 @@ export default function CodingPracticePage() {
 
   useEffect(() => {
     try {
+      const saved = JSON.parse(window.localStorage.getItem(savedChallengesKey) || "[]");
+      if (Array.isArray(saved)) {
+        // Hydrate device-local challenge history after the page mounts.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSavedChallenges(saved.filter((item): item is SavedCodingChallenge => Boolean(item?.id && item?.challenge?.title)).slice(0, maxSavedChallenges));
+      }
       const stored = window.localStorage.getItem(storageKey);
       const parsed = stored ? JSON.parse(stored) : null;
       if (parsed?.challenge) {
-        // Hydrate browser-only practice progress after the page mounts.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLanguage(languages.includes(parsed.language) ? parsed.language : "javascript");
         setDifficulty(["beginner", "intermediate", "advanced"].includes(parsed.difficulty) ? parsed.difficulty : "intermediate");
         setTopic(parsed.topic || "arrays-strings");
@@ -99,6 +144,7 @@ export default function CodingPracticePage() {
         setFinalReview(parsed.finalReview && typeof parsed.finalReview === "object" ? parsed.finalReview : null);
         setFailedAttempts(Number.isInteger(parsed.failedAttempts) ? Math.max(0, Math.min(20, parsed.failedAttempts)) : 0);
         setSolutionWalkthrough(parsed.solutionWalkthrough && typeof parsed.solutionWalkthrough === "object" ? parsed.solutionWalkthrough : null);
+        setPracticeId(typeof parsed.id === "string" && parsed.id ? parsed.id : newPracticeId());
       }
     } catch {
       window.localStorage.removeItem(storageKey);
@@ -106,18 +152,6 @@ export default function CodingPracticePage() {
       setIsLoaded(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!isLoaded || !challenge) return;
-    const timeout = window.setTimeout(() => {
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify({ language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, testResults, finalReview, failedAttempts, solutionWalkthrough }));
-      } catch {
-        setStatus("Progress could not be saved because browser storage is full.");
-      }
-    }, 450);
-    return () => window.clearTimeout(timeout);
-  }, [activeStep, challenge, coachFeedback, code, difficulty, failedAttempts, finalReview, isLoaded, language, notes, roleContext, solutionWalkthrough, testResults, topic]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -151,7 +185,29 @@ export default function CodingPracticePage() {
     return done;
   }, [code, finalReview, language, notes, testResults.length]);
 
+  const saveCurrentChallenge = useCallback(() => {
+    if (!challenge || !practiceId) return;
+    const snapshot: SavedCodingChallenge = { id: practiceId, savedAt: new Date().toISOString(), language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, testResults, finalReview, failedAttempts, solutionWalkthrough };
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+      setSavedChallenges((current) => {
+        const next = [snapshot, ...current.filter((item) => item.id !== practiceId)].slice(0, maxSavedChallenges);
+        window.localStorage.setItem(savedChallengesKey, JSON.stringify(next));
+        return next;
+      });
+    } catch {
+      setStatus("Progress could not be saved because browser storage is full.");
+    }
+  }, [activeStep, challenge, coachFeedback, code, difficulty, failedAttempts, finalReview, language, notes, practiceId, roleContext, solutionWalkthrough, testResults, topic]);
+
+  useEffect(() => {
+    if (!isLoaded || !challenge || !practiceId) return;
+    const timeout = window.setTimeout(saveCurrentChallenge, 450);
+    return () => window.clearTimeout(timeout);
+  }, [challenge, isLoaded, practiceId, saveCurrentChallenge]);
+
   const generateChallenge = async () => {
+    saveCurrentChallenge();
     setIsGenerating(true);
     setStatus("");
     try {
@@ -163,6 +219,7 @@ export default function CodingPracticePage() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload) throw new Error(payload?.error || "A coding challenge could not be generated.");
+      setPracticeId(newPracticeId());
       setChallenge(payload);
       setCode(starterFor(language));
       setNotes({});
@@ -301,14 +358,60 @@ export default function CodingPracticePage() {
     }
   };
 
-  const startNewChallenge = () => {
+  const clearActiveChallenge = () => {
     setChallenge(null);
+    setPracticeId("");
+    setActiveStep(0);
+    setNotes({});
+    setCoachFeedback({});
+    setCode(starterFor(language));
+    setTestResults([]);
+    setRunnerError("");
+    setFinalReview(null);
     setStatus("");
     setReviewError("");
     setFailedAttempts(0);
     setSolutionWalkthrough(null);
     setSolutionError("");
     window.localStorage.removeItem(storageKey);
+  };
+
+  const startNewChallenge = () => {
+    saveCurrentChallenge();
+    clearActiveChallenge();
+  };
+
+  const restoreSavedChallenge = (saved: SavedCodingChallenge) => {
+    setPracticeId(saved.id);
+    setLanguage(saved.language);
+    setDifficulty(saved.difficulty);
+    setTopic(saved.topic);
+    setRoleContext(saved.roleContext);
+    setChallenge(saved.challenge);
+    setActiveStep(Math.max(0, Math.min(stages.length - 1, saved.activeStep)));
+    setNotes(saved.notes);
+    setCoachFeedback(saved.coachFeedback);
+    setCode(saved.code);
+    setTestResults(saved.testResults);
+    setFinalReview(saved.finalReview);
+    setFailedAttempts(saved.failedAttempts);
+    setSolutionWalkthrough(saved.solutionWalkthrough);
+    setRunnerError("");
+    setReviewError("");
+    setSolutionError("");
+    setStatus(`Restored ${saved.challenge.title}.`);
+  };
+
+  const deleteSavedChallenge = (saved: SavedCodingChallenge) => {
+    const isCurrent = saved.id === practiceId;
+    if (!window.confirm(isCurrent ? "Delete this saved challenge and clear the active workspace?" : `Delete “${saved.challenge.title}” from this browser?`)) return;
+    setSavedChallenges((current) => {
+      const next = current.filter((item) => item.id !== saved.id);
+      window.localStorage.setItem(savedChallengesKey, JSON.stringify(next));
+      return next;
+    });
+    if (isCurrent) clearActiveChallenge();
+    else setStatus(`${saved.challenge.title} was deleted.`);
   };
 
   const current = stages[activeStep];
@@ -336,6 +439,19 @@ export default function CodingPracticePage() {
           </div>
           <button className="primary-button generate-coding-button" type="button" onClick={generateChallenge} disabled={isGenerating}>{isGenerating ? "Generating a fresh challenge…" : challenge ? "Generate a different challenge" : "Generate guided challenge"}</button>
           {status && <p className="studio-status" role="status">{status}</p>}
+        </section>
+
+        <section className="panel coding-history-panel">
+          <div className="panel-header"><div><p className="section-label">Device-local memory</p><h2>Saved coding challenges</h2><p className="memory-note">Your latest {maxSavedChallenges} challenges keep their plan, code, test results, coaching, progress, and final review in this browser.</p></div><span className="count-pill">{savedChallenges.length} saved</span></div>
+          {savedChallenges.length === 0 ? <div className="memory-empty"><strong>No saved challenges yet</strong><span>Generate a challenge and your progress will save automatically.</span></div> : <div className="coding-history-list">{savedChallenges.map((saved) => {
+            const completedSteps = savedProgress(saved);
+            const isCurrent = saved.id === practiceId;
+            return <article className={`coding-history-card ${isCurrent ? "active-coding-history" : ""}`} key={saved.id}>
+              <div className="coding-history-heading"><div><h3>{saved.challenge.title}</h3><p>{languageLabel(saved.language)} · {saved.difficulty} · {formatSavedDate(saved.savedAt)}</p></div>{isCurrent && <span>Active</span>}</div>
+              <div className="coding-history-progress"><div><i style={{ width: `${Math.round((completedSteps / stages.length) * 100)}%` }} /></div><span>{completedSteps} of {stages.length} steps</span></div>
+              <div className="memory-card-actions"><button className="small-action-button" type="button" onClick={() => restoreSavedChallenge(saved)}>{isCurrent ? "Continue" : "Open challenge"}</button><button className="small-action-button danger-button" type="button" onClick={() => deleteSavedChallenge(saved)}>Delete</button></div>
+            </article>;
+          })}</div>}
         </section>
 
         {!challenge ? <section className="panel coding-welcome"><div className="empty-state"><div className="empty-icon">01</div><h3>Your guided workspace will appear here</h3><p>Choose a language, difficulty, and topic. Each generated problem includes examples, constraints, safe tests, structured planning steps, and AI coaching.</p></div></section> : <>

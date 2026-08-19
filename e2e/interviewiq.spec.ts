@@ -106,7 +106,7 @@ test("Coding Practice supports five languages, free step navigation, and copy co
   await expect(page.getByLabel("Language").locator("option")).toHaveText(["JavaScript", "Python", "Java", "C#", "Rust"]);
   await page.getByLabel("Topic").selectOption("maps-sets");
   await page.getByRole("button", { name: "Generate guided challenge" }).click();
-  await expect(page.getByRole("heading", { name: "Count unique tags" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Count unique tags", level: 2 })).toBeVisible();
   await page.getByRole("button", { name: /Approach/ }).click();
   await expect(page.getByRole("heading", { name: "Choose an approach" })).toBeVisible();
   await page.getByLabel("Your work").fill("I will compare a nested-loop approach with a set, then use the set for linear expected time.");
@@ -131,5 +131,11 @@ test("Coding Practice supports five languages, free step navigation, and copy co
   await expect(page.getByRole("heading", { name: "Complete solution walkthrough" })).toBeVisible();
   await page.getByRole("button", { name: /Review/ }).click();
   await page.getByRole("button", { name: "Get final AI review" }).click();
+  await expect(page.getByText("Correct, concise, and appropriate for the constraints.")).toBeVisible();
+  await expect(page.getByText("1 saved", { exact: true })).toBeVisible({ timeout: 3000 });
+  await page.getByRole("button", { name: "Start new" }).click();
+  await expect(page.getByText("1 saved", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open challenge" }).click();
+  await expect(page.getByRole("heading", { name: "Count unique tags", level: 2 })).toBeVisible();
   await expect(page.getByText("Correct, concise, and appropriate for the constraints.")).toBeVisible();
 });

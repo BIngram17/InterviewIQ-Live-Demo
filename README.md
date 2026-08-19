@@ -41,8 +41,9 @@ Times New Roman 12-point DOCX export.
 - Tracks unsuccessful test and review attempts, then unlocks an AI-generated
   reasoning, pseudocode, code, complexity, and pitfalls walkthrough after three
   attempts
-- Autosaves the current coding challenge, reasoning notes, code, tests, and
-  coaching feedback in device-local browser storage
+- Saves up to 24 coding challenges in device-local browser storage, including
+  reasoning notes, code, tests, coaching, progress, unlocked walkthroughs, and
+  final reviews, with restore and confirmed delete controls
 - Runs JavaScript tests inside a restricted browser iframe and automatically
   sends the result to the AI coding coach
 - Reviews Python, Java, C#, and Rust solutions as inert text without executing them
@@ -274,8 +275,8 @@ interviewiq-live-demo/
 
 ## Demo Data and Limitations
 
-- Interview and application sessions are stored in the current browser, not a
-  hosted database or user account.
+- Interview, application, and coding-practice sessions are stored in the current
+  browser, not a hosted database or user account.
 - The public demo does not require an account.
 - Recorded audio remains in the browser and is not uploaded to the API.
 - JavaScript is the only language executed by the built-in test runner.
