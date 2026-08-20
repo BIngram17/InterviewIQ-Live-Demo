@@ -73,6 +73,9 @@ Times New Roman 12-point DOCX export.
 - Uses a transparent 100-point job-fit rubric, projected improvement score, and
   prioritized edits with estimated point impact to show the strongest path to a
   90%+ match without inventing qualifications
+- Locks a ten-criterion evaluation matrix to each saved application, calculates
+  scores from the fixed 30/25/20/15/10 rubric, preserves previously earned credit
+  while its supporting evidence remains, and shows score changes by category
 - Generates 325-400 word cover letters, exports them as TXT or DOCX, and
   preserves up to ten generated versions; if only the final length-adjustment
   request is rate-limited, the usable draft remains visible and clearly labeled

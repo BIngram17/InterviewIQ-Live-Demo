@@ -47,15 +47,28 @@ test("saved interview sessions are collapsed until requested", async ({ page }) 
 });
 
 test("Resume Studio completes and remembers a tailored application", async ({ page }) => {
+  let reviewCalls = 0;
+  let receivedLockedReview = false;
+  const evaluationCriteria = [
+    ["Required qualifications", "Required React experience", "required"],
+    ["Relevant experience and seniority", "Relevant software delivery", "quality"],
+    ["Skills and ATS terminology", "Relevant technical terminology", "quality"],
+    ["Quantified impact and evidence", "Evidence of measurable impact", "quality"],
+    ["Clarity and ATS readability", "Clear ATS-readable structure", "quality"],
+  ].map(([category, requirement, importance], index) => ({ id: `criterion-${index}`, category, requirement, importance, status: "met", projectedStatus: "met", evidence: "React applications", explanation: "Verified evidence" }));
   await page.route("**/api/job-import", (route) => route.fulfill({ json: { jobTitle: "Software Developer", company: "Northstar", level: "entry", jobDescription, sourceUrl: "https://example.com/job" } }));
   await page.route("**/api/resume-extract", (route) => route.fulfill({ json: { resumeText, fileName: "resume.txt" } }));
   await page.route("**/api/resume-tools", async (route) => {
     const body = route.request().postDataJSON();
+    if (body.action === "review") {
+      reviewCalls += 1;
+      receivedLockedReview = Boolean(body.previousReview?.evaluationCriteria?.length);
+    }
     await route.fulfill({ json: body.action === "review" ? {
-      action: "review", headline: "Strong foundation", score: 84, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"],
-      scoreBreakdown: [{ category: "Required qualifications", score: 25, maxScore: 30, evidence: "React and Node.js are present.", improvement: "Add testing evidence." }],
+      action: "review", reviewFingerprint: "locked-target", headline: "Strong foundation", score: reviewCalls === 1 ? 84 : 89, previousScore: reviewCalls === 1 ? undefined : 84, scoreDelta: reviewCalls === 1 ? undefined : 5, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"], evaluationCriteria,
+      scoreBreakdown: [{ category: "Required qualifications", score: reviewCalls === 1 ? 25 : 28, previousScore: reviewCalls === 1 ? undefined : 25, maxScore: 30, evidence: "React and Node.js are present.", improvement: "Add testing evidence." }],
       changes: [{ section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved release reliability by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info", priority: "high", scoreImpact: 5 }]
-    } : { action: "cover-letter", headline: "Northstar cover letter", coverLetter: "Dear Hiring Team,\n\nI am excited to apply for the Software Developer role. My experience building React applications and Node.js APIs aligns with your needs.\n\nSincerely,\nJordan Lee", notes: ["Verify the hiring manager name."] } });
+    } : { action: "cover-letter", headline: "Northstar cover letter", coverLetter: "Dear Hiring Team,\n\nI am excited to apply for the Software Developer role. My experience building React applications and Node.js APIs aligns with your needs.\n\nSincerely,\nJordan Lee", notes: ["Word count: 351 words (target: 350-375).", "Paragraph 1: 58 words.", "Verify the hiring manager name."] } });
   });
 
   await page.goto("/resume/");
@@ -73,10 +86,18 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await expect(page.getByText("93%")).toBeVisible();
   await expect(page.getByText("Potential lift:")).toBeVisible();
   await expect(page.getByText(/improve continuous delivery/)).toBeVisible();
+  await page.getByLabel("Resume text").fill(`${resumeText} Reduced deployment failures by 20% through automated validation.`);
+  await expect(page.getByText("Needs refresh")).toBeVisible();
+  await page.getByRole("button", { name: /Regenerate review/ }).click();
+  await expect(page.getByText("+5 since last review")).toBeVisible();
+  expect(receivedLockedReview).toBe(true);
   await page.getByLabel("Tone").selectOption("concise");
   await page.getByRole("button", { name: /Generate tailored cover letter/ }).click();
   await expect(page.getByText("Saved versions")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download DOCX" })).toBeVisible();
+  await expect(page.getByText("Verify the hiring manager name.")).toBeVisible();
+  await expect(page.getByText(/Paragraph 1:/)).toHaveCount(0);
+  await expect(page.getByText(/target: 350-375/i)).toHaveCount(0);
   await expect(page.getByText(/Saved in this browser/)).toBeVisible({ timeout: 3000 });
   await page.evaluate(() => window.scrollTo(0, 0));
   if (process.env.UPDATE_README_SCREENSHOT === "1") {
