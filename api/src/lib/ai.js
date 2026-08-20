@@ -75,9 +75,9 @@ export function allowRequest(request, scope) {
   };
 }
 
-export async function readBody(request) {
+export async function readBody(request, maxBytes = 32_000) {
   const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 32_000) throw new ApiError(413, "Request is too large.");
+  if (contentLength > maxBytes) throw new ApiError(413, "Request is too large.");
   try {
     return await request.json();
   } catch {

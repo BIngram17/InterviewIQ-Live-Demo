@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWords, coverLetterInRange, currentDateIso, endsWithOmission, mislabelsCompletedPastDate, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation } from "../src/lib/resume-review.js";
+import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -59,4 +59,47 @@ test("accepts only cover letters between 325 and 400 words", () => {
   assert.equal(coverLetterInRange("word ".repeat(325)), true);
   assert.equal(coverLetterInRange("word ".repeat(400)), true);
   assert.equal(coverLetterInRange("word ".repeat(401)), false);
+});
+
+test("keeps actionable cover-letter notes and removes redundant count summaries", () => {
+  assert.deepEqual(coverLetterNotes([
+    "Word count: 351 words (target: 350-375).",
+    "Paragraph 1: 58 words.",
+    "Verify the hiring manager's name before sending.",
+  ]), ["Verify the hiring manager's name before sending."]);
+});
+
+test("calculates the resume score from the fixed five-category rubric", () => {
+  const criteria = resumeScoringRubric.map((item, index) => ({
+    id: `criterion-${index}`,
+    category: item.category,
+    requirement: item.category,
+    importance: "quality",
+    status: "met",
+    projectedStatus: "met",
+    evidence: "Verified evidence",
+    explanation: "",
+  }));
+  const result = scoreEvaluationCriteria(criteria);
+  assert.equal(result.score, 100);
+  assert.deepEqual(result.breakdown.map((item) => item.maxScore), [30, 25, 20, 15, 10]);
+});
+
+test("locks criteria and preserves earned credit while its exact evidence remains", () => {
+  const previous = [{
+    id: "required-react",
+    category: "Required qualifications",
+    requirement: "Build accessible React applications",
+    importance: "required",
+    status: "met",
+    projectedStatus: "met",
+    evidence: "Built accessible React applications",
+    explanation: "Direct evidence",
+  }];
+  const reassessed = [{ ...previous[0], requirement: "Changed requirement", status: "missing", evidence: "" }];
+  const normalized = normalizeEvaluationCriteria(reassessed, previous, "Built accessible React applications for customers.");
+  const criterion = normalized.find((item) => item.id === "required-react");
+  assert.equal(criterion.requirement, "Build accessible React applications");
+  assert.equal(criterion.status, "met");
+  assert.equal(criterion.evidence, "Built accessible React applications");
 });

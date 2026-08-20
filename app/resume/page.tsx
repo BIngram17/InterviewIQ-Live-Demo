@@ -7,18 +7,23 @@ import ProductSwitcher from "../components/ProductSwitcher";
 import JobUrlImporter, { ImportedJob } from "../components/JobUrlImporter";
 
 type Change = { section: string; operation?: "add" | "replace" | "move"; placement?: string; sourceEvidence?: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
-type ScoreBreakdown = { category: string; score: number; maxScore: number; evidence: string; improvement: string };
+type EvaluationCriterion = { id: string; category: string; requirement: string; importance: "required" | "preferred" | "quality"; status: "met" | "partial" | "missing"; projectedStatus: "met" | "partial" | "missing"; evidence: string; explanation: string };
+type ScoreBreakdown = { category: string; score: number; maxScore: number; previousScore?: number; evidence: string; improvement: string };
 type ResumeResult = {
   action: "review" | "cover-letter";
   headline?: string;
   score?: number;
   projectedScore?: number;
+  previousScore?: number;
+  scoreDelta?: number;
+  reviewFingerprint?: string;
   summary?: string;
   strengths?: string[];
   gaps?: string[];
   atsKeywords?: string[];
   nextSteps?: string[];
   scoreBreakdown?: ScoreBreakdown[];
+  evaluationCriteria?: EvaluationCriterion[];
   changes?: Change[];
   coverLetter?: string;
   notes?: string[];
@@ -61,6 +66,7 @@ export default function ResumeStudio() {
   const [level, setLevel] = useState("entry");
   const [jobDescription, setJobDescription] = useState("");
   const [reviewResult, setReviewResult] = useState<ResumeResult | null>(null);
+  const [isReviewStale, setIsReviewStale] = useState(false);
   const [coverResult, setCoverResult] = useState<ResumeResult | null>(null);
   const [coverTone, setCoverTone] = useState<CoverTone>("standard");
   const [coverVersions, setCoverVersions] = useState<CoverVersion[]>([]);
@@ -222,6 +228,7 @@ export default function ResumeStudio() {
     setResume(application.resume);
     setResumeFileName(application.resumeFileName);
     setReviewResult(application.reviewResult);
+    setIsReviewStale(false);
     setCoverResult(application.coverResult);
     setCoverVersions(application.coverVersions || []);
     setIsTargetCollapsed(Boolean(application.jobTitle && application.jobDescription.length >= 50));
@@ -239,6 +246,7 @@ export default function ResumeStudio() {
     setResume("");
     setResumeFileName("");
     setReviewResult(null);
+    setIsReviewStale(false);
     setCoverResult(null);
     setCoverVersions([]);
     setIsTargetCollapsed(false);
@@ -262,14 +270,14 @@ export default function ResumeStudio() {
 
   const updateCandidateProfile = (field: keyof CandidateProfile, value: string) => {
     setCandidateProfile((current) => ({ ...current, [field]: value }));
-    setReviewResult(null);
+    setIsReviewStale(Boolean(reviewResult));
     setCoverResult(null);
     setIsCandidateProfileClearPending(false);
   };
 
   const clearCandidateProfile = () => {
     setCandidateProfile(emptyCandidateProfile);
-    setReviewResult(null);
+    setIsReviewStale(Boolean(reviewResult));
     setCoverResult(null);
     setIsCandidateProfileClearPending(false);
     setCandidateProfileStatus("Candidate Profile cleared from this browser.");
@@ -293,6 +301,7 @@ export default function ResumeStudio() {
     setLevel(job.level);
     setJobDescription(job.jobDescription);
     setReviewResult(null);
+    setIsReviewStale(false);
     setCoverResult(null);
     setCoverVersions([]);
     setIsTargetCollapsed(true);
@@ -306,7 +315,7 @@ export default function ResumeStudio() {
     }
     setIsExtracting(true);
     setResumeStatus("Reading your resume...");
-    setReviewResult(null);
+    setIsReviewStale(Boolean(reviewResult));
     setCoverResult(null);
     try {
       const form = new FormData();
@@ -343,12 +352,14 @@ export default function ResumeStudio() {
     const setStatus = action === "review" ? setResumeStatus : setCoverStatus;
     setBusy(true);
     setStatus("");
-    if (action === "review") setReviewResult(null);
+    const previousReview = action === "review" && reviewResult?.evaluationCriteria?.length
+      ? { reviewFingerprint: reviewResult.reviewFingerprint, evaluationCriteria: reviewResult.evaluationCriteria, scoreBreakdown: reviewResult.scoreBreakdown }
+      : undefined;
     try {
       const response = await fetch("/api/resume-tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone }),
+        body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone, previousReview }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -360,6 +371,7 @@ export default function ResumeStudio() {
       }
       if (action === "review") {
         setReviewResult(payload);
+        setIsReviewStale(false);
         setStatus("Your review and targeted changes are ready.");
       } else {
         setCoverResult(payload);
@@ -421,11 +433,11 @@ export default function ResumeStudio() {
             <JobUrlImporter key={activeApplicationId || "loading"} onImported={applyImportedJob} compact />
             <div className="target-job-fields">
               <div className="target-job-meta">
-                <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => { setJobTitle(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
-                <label className="field"><span>Company</span><input maxLength={100} value={company} onChange={(event) => { setCompany(event.target.value); setReviewResult(null); setCoverResult(null); }} /></label>
-                <label className="field"><span>Role level</span><select value={level} onChange={(event) => { setLevel(event.target.value); setReviewResult(null); setCoverResult(null); }}><option value="internship">Internship</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior level</option></select></label>
+                <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => { setJobTitle(event.target.value); setReviewResult(null); setIsReviewStale(false); setCoverResult(null); }} /></label>
+                <label className="field"><span>Company</span><input maxLength={100} value={company} onChange={(event) => { setCompany(event.target.value); setReviewResult(null); setIsReviewStale(false); setCoverResult(null); }} /></label>
+                <label className="field"><span>Role level</span><select value={level} onChange={(event) => { setLevel(event.target.value); setReviewResult(null); setIsReviewStale(false); setCoverResult(null); }}><option value="internship">Internship</option><option value="entry">Entry level</option><option value="mid">Mid level</option><option value="senior">Senior level</option></select></label>
               </div>
-              <label className="field"><span>Job description</span><textarea className="job-description-textarea" value={jobDescription} maxLength={6000} onChange={(event) => { setJobDescription(event.target.value); setReviewResult(null); setCoverResult(null); }} placeholder="Import a posting URL or paste the complete job description here." /></label>
+              <label className="field"><span>Job description</span><textarea className="job-description-textarea" value={jobDescription} maxLength={6000} onChange={(event) => { setJobDescription(event.target.value); setReviewResult(null); setIsReviewStale(false); setCoverResult(null); }} placeholder="Import a posting URL or paste the complete job description here." /></label>
               <button className="small-action-button target-ready-button" type="button" disabled={!jobReady} onClick={() => setIsTargetCollapsed(true)}>Use this target job</button>
             </div>
           </div>}
@@ -494,9 +506,9 @@ export default function ResumeStudio() {
                 <p>PDF, DOCX, or TXT · up to 5 MB</p>
                 <span className="upload-file-button">Upload from computer</span>
               </div>
-              {resumeFileName && <div className="uploaded-file-chip"><span><strong>{resumeFileName}</strong><small>Text extracted successfully</small></span><button type="button" onClick={() => { setResume(""); setResumeFileName(""); setReviewResult(null); setCoverResult(null); setResumeStatus(""); }}>Remove</button></div>}
+              {resumeFileName && <div className="uploaded-file-chip"><span><strong>{resumeFileName}</strong><small>Text extracted successfully</small></span><button type="button" onClick={() => { setResume(""); setResumeFileName(""); setReviewResult(null); setIsReviewStale(false); setCoverResult(null); setResumeStatus(""); }}>Remove</button></div>}
               <div className="paste-divider"><span>or paste and edit</span></div>
-              <label className="field"><span>Resume text</span><textarea className="resume-textarea" value={resume} maxLength={14000} onChange={(event) => { setResume(event.target.value); setResumeFileName(""); setReviewResult(null); setCoverResult(null); }} placeholder="Paste the complete text of your resume here." /></label>
+              <label className="field"><span>Resume text</span><textarea className="resume-textarea" value={resume} maxLength={14000} onChange={(event) => { setResume(event.target.value); setResumeFileName(""); setIsReviewStale(Boolean(reviewResult)); setCoverResult(null); }} placeholder="Paste the complete text of your resume here." /></label>
               <p className="privacy-note">The original file is not stored. Extracted text autosaves only in this browser and is sent to AI when you run a tool.</p>
               {!toolsReady && <p className="requirement-hint">Add a target job and at least 120 characters of resume text to enable AI tools.</p>}
               <button className="primary-button review-resume-button" type="button" disabled={!toolsReady || isReviewing || isExtracting} onClick={() => runTool("review")}>{isReviewing ? "Reviewing resume..." : reviewResult ? "Regenerate review + targeted changes" : "Review resume + targeted changes"}</button>
@@ -504,7 +516,8 @@ export default function ResumeStudio() {
             </article>
 
             <article className="panel studio-panel resume-result-panel">
-              <div className="panel-header"><div><p className="section-label">AI resume coach</p><h2>{reviewResult?.headline || "Review and recommendations"}</h2></div>{reviewResult?.score && <span className="resume-score">{reviewResult.score}%<small>fit</small></span>}</div>
+              <div className="panel-header"><div><p className="section-label">AI resume coach</p><h2>{reviewResult?.headline || "Review and recommendations"}</h2></div><div className="review-score-stack">{isReviewStale && <span className="review-stale-badge">Needs refresh</span>}{reviewResult?.score && <span className="resume-score">{reviewResult.score}%<small>fit</small></span>}</div></div>
+              {isReviewStale && <p className="review-stale-notice" role="status">The resume or Candidate Profile changed. Regenerate the review to calculate an updated score against the same criteria.</p>}
               {!reviewResult ? <EmptyResult text="Upload or paste your resume, add the target job, and run the review to see strengths, gaps, ATS keywords, and exact changes." /> : <ReviewResultView result={reviewResult} />}
             </article>
           </div>
@@ -532,8 +545,8 @@ export default function ResumeStudio() {
 function ReviewResultView({ result }: { result: ResumeResult }) {
   return <div className="resume-result-content">
     {result.summary && <p className="result-summary">{result.summary}</p>}
-    {result.score && result.projectedScore && <section className="score-path-card"><div><span>Current fit</span><strong>{result.score}%</strong></div><span className="score-path-arrow">→</span><div><span>Potential fit</span><strong>{result.projectedScore}%</strong></div><p>Potential fit assumes every safe rewrite is applied and every requested detail is verified. It is an estimate, not an ATS guarantee.</p></section>}
-    {!!result.scoreBreakdown?.length && <section className="score-breakdown"><div><p className="section-label">Scoring rubric</p><h3>Where the points come from</h3></div>{result.scoreBreakdown.map((item) => <article key={item.category}><div><strong>{item.category}</strong><span>{item.score}/{item.maxScore}</span></div><p>{item.evidence}</p>{item.improvement && <small><strong>Best improvement:</strong> {item.improvement}</small>}</article>)}</section>}
+    {result.score && result.projectedScore && <section className="score-path-card"><div><span>Current fit</span><strong>{result.score}%</strong>{typeof result.scoreDelta === "number" && <small className={result.scoreDelta > 0 ? "score-delta positive" : result.scoreDelta < 0 ? "score-delta negative" : "score-delta"}>{formatScoreDelta(result.scoreDelta)} since last review</small>}</div><span className="score-path-arrow">→</span><div><span>Potential fit</span><strong>{result.projectedScore}%</strong></div><p>The current score is calculated from locked criteria for this application. Potential fit assumes every safe rewrite is applied and every requested detail is verified; it remains an estimate, not an ATS guarantee.</p></section>}
+    {!!result.scoreBreakdown?.length && <section className="score-breakdown"><div><p className="section-label">Scoring rubric</p><h3>Where the points come from</h3></div>{result.scoreBreakdown.map((item) => { const delta = typeof item.previousScore === "number" ? item.score - item.previousScore : null; return <article key={item.category}><div><strong>{item.category}</strong><span>{item.score}/{item.maxScore}{delta !== null && delta !== 0 ? ` (${formatScoreDelta(delta)})` : ""}</span></div><p>{item.evidence}</p>{item.improvement && <small><strong>Best improvement:</strong> {item.improvement}</small>}</article>; })}</section>}
     <KeywordList items={result.atsKeywords} />
     <div className="result-two-column"><ResultList title="What already works" items={result.strengths} /><ResultList title="Gaps to address" items={result.gaps} /></div>
     <ResultList title="Highest-impact next steps" items={result.nextSteps} />
@@ -554,7 +567,8 @@ function ReviewResultView({ result }: { result: ResumeResult }) {
 
 function CoverLetterView({ result, onDownload }: { result: ResumeResult; onDownload: (format: "txt" | "docx") => void }) {
   const wordCount = result.coverLetter?.trim().split(/\s+/).filter(Boolean).length || 0;
-  return <div className="resume-result-content">{result.isDraft && <div className="cover-draft-warning" role="alert"><strong>Draft preserved</strong><p>{result.warning || "This letter still needs to be adjusted to the 325-400 word target before sending."}</p></div>}<div className="result-actions"><span className="count-pill">{wordCount} words{result.isDraft ? " · draft" : ""}</span><CopyButton text={result.coverLetter || ""} label="Copy" copiedLabel="Letter copied" /><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
+  const actionableNotes = visibleCoverLetterNotes(result.notes);
+  return <div className="resume-result-content">{result.isDraft && <div className="cover-draft-warning" role="alert"><strong>Draft preserved</strong><p>{result.warning || "This letter still needs to be adjusted to the 325-400 word target before sending."}</p></div>}<div className="result-actions"><span className="count-pill">{wordCount} words{result.isDraft ? " · draft" : ""}</span><CopyButton text={result.coverLetter || ""} label="Copy" copiedLabel="Letter copied" /><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{actionableNotes.length ? <ResultList title="Before sending" items={actionableNotes} /> : null}</div>;
 }
 
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }
@@ -564,6 +578,8 @@ function formatMemoryDate(value: number) { return new Intl.DateTimeFormat(undefi
 function formatRoleLevel(value: string) { return value === "internship" ? "Internship" : value === "entry" ? "Entry level" : value === "mid" ? "Mid level" : "Senior level"; }
 function formatTone(value: CoverTone) { return value === "concise" ? "Concise" : value === "conversational" ? "Conversational" : "Professional"; }
 function capitalize(value: string) { return value.charAt(0).toUpperCase() + value.slice(1); }
+function formatScoreDelta(value: number) { return value > 0 ? `+${value}` : String(value); }
+function visibleCoverLetterNotes(value: string[] = []) { return value.filter((item) => !/\bword count\b|\b\d+\s+words?\b|\bparagraph\s+\d+\b|\btarget(?:ed)?\s*(?:range)?\s*[:(-]?\s*\d+/i.test(item)); }
 function formatOperation(value?: Change["operation"]) { return value === "replace" ? "Replace" : value === "move" ? "Move" : "Add"; }
 function formatRelativeTime(value: number) { const seconds = Math.max(0, Math.round((Date.now() - value) / 1000)); return seconds < 10 ? "just now" : seconds < 60 ? `${seconds}s ago` : `${Math.round(seconds / 60)}m ago`; }
 function safeFileName(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cover-letter"; }

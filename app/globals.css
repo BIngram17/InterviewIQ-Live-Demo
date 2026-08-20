@@ -479,12 +479,19 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .resume-result-panel { width:100%; min-width:0; max-width:100%; min-height:540px; }
 .resume-score { display:grid; place-items:center; min-width:78px; padding:10px; border-radius:18px; color:white; background:linear-gradient(135deg,var(--brand-purple),var(--brand-blue)); font-size:1.25rem; font-weight:900; }
 .resume-score small { font-size:.7rem; text-transform:uppercase; }
+.review-score-stack { display:flex; align-items:center; gap:9px; }
+.review-stale-badge { padding:7px 10px; border:1px solid rgba(245,158,11,.4); border-radius:999px; color:#fcd34d; background:rgba(120,53,15,.2); font-size:.7rem; font-weight:900; text-transform:uppercase; }
+.review-stale-notice { margin:0; padding:11px 14px; border:1px solid rgba(245,158,11,.32); border-radius:13px; color:#fde68a; background:rgba(120,53,15,.16); line-height:1.5; }
+:root[data-theme="light"] .review-stale-badge,:root[data-theme="light"] .review-stale-notice { color:#92400e; background:#fffbeb; }
 .resume-result-content { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; max-width:100%; gap:15px; }
 .resume-result-content > * { min-width:0; max-width:100%; }
 .score-path-card { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); width:100%; min-width:0; max-width:100%; align-items:center; gap:14px; padding:16px; border:1px solid rgba(124,58,237,.25); border-radius:18px; background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(14,165,233,.08)); }
 .score-path-card > div { display:grid; gap:3px; }
 .score-path-card > div span { color:var(--text-muted); font-size:.72rem; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
 .score-path-card > div strong { color:var(--text-main); font-size:1.45rem; }
+.score-path-card .score-delta { color:var(--text-muted); font-size:.72rem; font-weight:800; letter-spacing:0; text-transform:none; }
+.score-path-card .score-delta.positive { color:#4ade80; }
+.score-path-card .score-delta.negative { color:#fca5a5; }
 .score-path-card > p { grid-column:1/-1; margin:0; color:var(--text-muted); font-size:.75rem; line-height:1.5; }
 .score-path-arrow { color:var(--brand-cyan); font-size:1.4rem; font-weight:900; }
 .score-breakdown { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; max-width:100%; gap:10px; padding:16px; border:1px solid var(--border-soft); border-radius:18px; background:rgba(255,255,255,.05); }
