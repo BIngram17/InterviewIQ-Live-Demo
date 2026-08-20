@@ -74,7 +74,8 @@ Times New Roman 12-point DOCX export.
   prioritized edits with estimated point impact to show the strongest path to a
   90%+ match without inventing qualifications
 - Generates 325-400 word cover letters, exports them as TXT or DOCX, and
-  preserves up to ten generated versions
+  preserves up to ten generated versions; if only the final length-adjustment
+  request is rate-limited, the usable draft remains visible and clearly labeled
 - Provides a persistent Interview Prep / Resume Studio switcher on desktop and mobile
 - Accepts drag-and-drop PDF, DOCX, and TXT resumes and extracts their text
   without permanently storing the uploaded file
@@ -251,6 +252,10 @@ fallback model receives a fresh request budget instead of inheriting an expired
 signal. The optional attempt and total timeout settings default to 17 and 50
 seconds respectively. Gemini thinking is set to `low` for these latency-sensitive
 structured JSON operations so reasoning does not consume the response budget.
+Cover-letter generation limits each stage to two model attempts, never repeats a
+model that already returned a rate limit, and sends any word-count correction to
+the fallback first. Provider retry timing is returned to Resume Studio as a
+visible button countdown instead of encouraging repeated requests.
 
 ## Project Structure
 

@@ -84,6 +84,25 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   }
 });
 
+test("Resume Studio shows a retry countdown when the free AI quota is busy", async ({ page }) => {
+  await page.route("**/api/resume-tools", (route) => route.fulfill({
+    status: 429,
+    headers: { "Content-Type": "application/json", "Retry-After": "4" },
+    body: JSON.stringify({ error: "The free AI demo is busy. Try again in 4 seconds." }),
+  }));
+
+  await page.goto("/resume/");
+  await page.getByLabel("Job title").fill("Software Developer");
+  await page.getByLabel("Company").fill("Northstar");
+  await page.getByLabel("Job description").fill(jobDescription);
+  await page.getByRole("button", { name: "Use this target job" }).click();
+  await page.getByLabel("Resume text").fill(resumeText);
+  await page.getByRole("button", { name: "Generate tailored cover letter" }).click();
+
+  await expect(page.getByText("The free AI demo is busy. Try again in 4 seconds.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Try again in [1-4]s/ })).toBeDisabled();
+});
+
 test("mobile layout prioritizes the target job and collapses saved applications", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/resume/");

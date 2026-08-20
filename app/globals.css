@@ -513,6 +513,9 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .change-placement p { min-width:0; overflow-wrap:anywhere; }
 .resume-change-card .source-evidence { padding:11px 13px; border-left:3px solid var(--brand-cyan); border-radius:0 12px 12px 0; background:rgba(14,165,233,.06); overflow-wrap:anywhere; }
 .cover-letter-output { padding:22px; border:1px solid var(--border-soft); border-radius:20px; color:var(--text-soft); background:var(--field-bg); white-space:pre-wrap; line-height:1.72; }
+.cover-draft-warning { display:grid; gap:5px; padding:14px 16px; border:1px solid rgba(245,158,11,.45); border-radius:15px; color:#fde68a; background:rgba(120,53,15,.2); }
+.cover-draft-warning p { margin:0; color:inherit; line-height:1.5; }
+:root[data-theme="light"] .cover-draft-warning { color:#92400e; background:#fffbeb; }
 .result-actions { justify-content:flex-end; flex-wrap:wrap; }
 .cover-version-list { display:grid; gap:8px; padding-top:14px; border-top:1px solid var(--border-soft); }
 .cover-version-list h3 { margin:0 0 4px; color:var(--text-main); }

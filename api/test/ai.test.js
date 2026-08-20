@@ -148,12 +148,28 @@ test("completeJson can use the faster fallback model first for latency-sensitive
 });
 
 test("completeJson translates Gemini rate limits into a safe public error", async () => {
-  globalThis.fetch = async () => new Response("{}", { status: 429 });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("{}", { status: 429, headers: { "Retry-After": "12" } });
+  };
 
   await assert.rejects(
     completeJson({ system: "Return JSON.", data: {} }),
-    (error) => error instanceof ApiError && error.status === 429 && /Try again shortly/.test(error.message),
+    (error) => error instanceof ApiError && error.status === 429 && error.retryAfter === 12 && /12 seconds/.test(error.message),
   );
+  assert.equal(calls, 2, "each rate-limited model should be attempted only once");
+});
+
+test("completeJson respects a smaller attempt budget", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("{}", { status: 503 });
+  };
+
+  await assert.rejects(completeJson({ system: "Return JSON.", data: {}, maxAttempts: 2 }));
+  assert.equal(calls, 2);
 });
 
 test("completeJson returns a clear 503 after exhausting transient retries", async () => {

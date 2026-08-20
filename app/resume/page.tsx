@@ -22,6 +22,9 @@ type ResumeResult = {
   changes?: Change[];
   coverLetter?: string;
   notes?: string[];
+  isDraft?: boolean;
+  warning?: string;
+  retryAfterSeconds?: number;
 };
 
 type SavedApplication = {
@@ -65,6 +68,7 @@ export default function ResumeStudio() {
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [resumeStatus, setResumeStatus] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
+  const [coverRetrySeconds, setCoverRetrySeconds] = useState(0);
   const [savedApplications, setSavedApplications] = useState<SavedApplication[]>([]);
   const [activeApplicationId, setActiveApplicationId] = useState("");
   const [isMemoryLoaded, setIsMemoryLoaded] = useState(false);
@@ -84,6 +88,12 @@ export default function ResumeStudio() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { document.documentElement.dataset.theme = isDarkMode ? "dark" : "light"; }, [isDarkMode]);
+
+  useEffect(() => {
+    if (coverRetrySeconds <= 0) return;
+    const timeout = window.setTimeout(() => setCoverRetrySeconds((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearTimeout(timeout);
+  }, [coverRetrySeconds]);
 
   useEffect(() => {
     try {
@@ -328,7 +338,7 @@ export default function ResumeStudio() {
   const candidateProfileSections = Object.values(candidateProfile).filter((value) => value.trim()).length;
 
   const runTool = async (action: "review" | "cover-letter") => {
-    if (!toolsReady) return;
+    if (!toolsReady || (action === "cover-letter" && coverRetrySeconds > 0)) return;
     const setBusy = action === "review" ? setIsReviewing : setIsGeneratingCover;
     const setStatus = action === "review" ? setResumeStatus : setCoverStatus;
     setBusy(true);
@@ -341,14 +351,22 @@ export default function ResumeStudio() {
         body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || "The resume coach could not complete this request.");
+      if (!response.ok) {
+        if (action === "cover-letter" && response.status === 429) {
+          const retryAfter = Number(response.headers.get("Retry-After"));
+          setCoverRetrySeconds(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);
+        }
+        throw new Error(payload?.error || "The resume coach could not complete this request.");
+      }
       if (action === "review") {
         setReviewResult(payload);
         setStatus("Your review and targeted changes are ready.");
       } else {
         setCoverResult(payload);
         setCoverVersions((current) => [{ id: crypto.randomUUID(), createdAt: Date.now(), tone: coverTone, result: payload }, ...current].slice(0, 10));
-        setStatus("Your tailored cover letter is ready.");
+        const retryAfter = Number(payload?.retryAfterSeconds);
+        setCoverRetrySeconds(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 0);
+        setStatus(payload?.isDraft ? payload.warning || "Your draft was preserved, but it still needs a length adjustment." : "Your tailored cover letter is ready.");
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "The resume coach could not complete this request.");
@@ -495,14 +513,14 @@ export default function ResumeStudio() {
             <article className="panel studio-panel cover-letter-action-panel">
               <div className="panel-header"><div><p className="section-label">Cover letter generator</p><h2>Create your tailored letter</h2></div></div>
               <label className="field"><span>Tone</span><select value={coverTone} onChange={(event) => setCoverTone(event.target.value as CoverTone)}><option value="standard">Professional</option><option value="concise">Concise</option><option value="conversational">Conversational</option></select></label>
-              <button className="primary-button" type="button" disabled={!toolsReady || isGeneratingCover || isExtracting} onClick={() => runTool("cover-letter")}>{isGeneratingCover ? "Writing cover letter..." : coverResult ? "Generate another version" : "Generate tailored cover letter"}</button>
+              <button className="primary-button" type="button" disabled={!toolsReady || isGeneratingCover || isExtracting || coverRetrySeconds > 0} onClick={() => runTool("cover-letter")}>{isGeneratingCover ? "Writing cover letter..." : coverRetrySeconds > 0 ? `Try again in ${coverRetrySeconds}s` : coverResult ? "Generate another version" : "Generate tailored cover letter"}</button>
               {coverStatus && <p className="studio-status" role="status">{coverStatus}</p>}
             </article>
 
             <article className="panel studio-panel resume-result-panel cover-result-panel">
               <div className="panel-header"><div><p className="section-label">AI cover letter</p><h2>{coverResult?.headline || "Your tailored letter"}</h2></div></div>
               {!coverResult ? <EmptyResult text="The letter will use only facts from your resume and Candidate Profile, then align them with this job posting." /> : <CoverLetterView result={coverResult} onDownload={downloadCover} />}
-              {!!coverVersions.length && <section className="cover-version-list"><h3>Saved versions</h3>{coverVersions.map((version, index) => <button className={version.result === coverResult ? "active" : ""} type="button" key={version.id} onClick={() => { setCoverResult(version.result); setCoverTone(version.tone); }}><span>Version {coverVersions.length - index} · {formatTone(version.tone)}</span><small>{formatMemoryDate(version.createdAt)}</small></button>)}</section>}
+              {!!coverVersions.length && <section className="cover-version-list"><h3>Saved versions</h3>{coverVersions.map((version, index) => <button className={version.result === coverResult ? "active" : ""} type="button" key={version.id} onClick={() => { setCoverResult(version.result); setCoverTone(version.tone); }}><span>Version {coverVersions.length - index} · {formatTone(version.tone)}{version.result.isDraft ? " · Draft" : ""}</span><small>{formatMemoryDate(version.createdAt)}</small></button>)}</section>}
             </article>
           </div>
         </section>
@@ -536,7 +554,7 @@ function ReviewResultView({ result }: { result: ResumeResult }) {
 
 function CoverLetterView({ result, onDownload }: { result: ResumeResult; onDownload: (format: "txt" | "docx") => void }) {
   const wordCount = result.coverLetter?.trim().split(/\s+/).filter(Boolean).length || 0;
-  return <div className="resume-result-content"><div className="result-actions"><span className="count-pill">{wordCount} words</span><CopyButton text={result.coverLetter || ""} label="Copy" copiedLabel="Letter copied" /><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
+  return <div className="resume-result-content">{result.isDraft && <div className="cover-draft-warning" role="alert"><strong>Draft preserved</strong><p>{result.warning || "This letter still needs to be adjusted to the 325-400 word target before sending."}</p></div>}<div className="result-actions"><span className="count-pill">{wordCount} words{result.isDraft ? " · draft" : ""}</span><CopyButton text={result.coverLetter || ""} label="Copy" copiedLabel="Letter copied" /><button className="small-action-button" type="button" onClick={() => onDownload("txt")}>Download TXT</button><button className="small-action-button" type="button" onClick={() => onDownload("docx")}>Download DOCX</button></div><div className="cover-letter-output">{result.coverLetter}</div>{result.notes?.length ? <ResultList title="Before sending" items={result.notes} /> : null}</div>;
 }
 
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }

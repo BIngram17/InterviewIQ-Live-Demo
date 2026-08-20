@@ -86,9 +86,10 @@ export async function readBody(request) {
 }
 
 export class ApiError extends Error {
-  constructor(status, message) {
+  constructor(status, message, retryAfter = 0) {
     super(message);
     this.status = status;
+    this.retryAfter = Math.max(0, Number(retryAfter) || 0);
   }
 }
 
@@ -191,7 +192,7 @@ async function parseGeminiJson(response) {
   return JSON.parse(normalizeJsonText(content));
 }
 
-export async function completeJson({ system, data, maxTokens = 1800, validate, preferFallback = false }) {
+export async function completeJson({ system, data, maxTokens = 1800, validate, preferFallback = false, maxAttempts = 3 }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ApiError(503, "Live AI is not configured yet.");
@@ -201,19 +202,24 @@ export async function completeJson({ system, data, maxTokens = 1800, validate, p
   let response;
   let sawTimeout = false;
   let sawInvalidContent = false;
-  const modelAttempts = PRIMARY_MODEL === FALLBACK_MODEL
+  let rateLimitRetryAfter = 0;
+  const rateLimitedModels = new Set();
+  const configuredAttempts = PRIMARY_MODEL === FALLBACK_MODEL
     ? [PRIMARY_MODEL, PRIMARY_MODEL]
     : preferFallback
       ? [FALLBACK_MODEL, PRIMARY_MODEL, FALLBACK_MODEL]
       : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
+  const modelAttempts = configuredAttempts.slice(0, Math.max(1, Math.min(3, Number(maxAttempts) || 3)));
 
   for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {
+    const model = modelAttempts[attempt];
+    if (rateLimitedModels.has(model)) continue;
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) break;
     const controller = new AbortController();
     const attemptTimeout = setTimeout(() => controller.abort(), Math.min(ATTEMPT_TIMEOUT_MS, remainingMs));
     try {
-      response = await requestGemini({ apiKey, model: modelAttempts[attempt], system, data, maxTokens, signal: controller.signal });
+      response = await requestGemini({ apiKey, model, system, data, maxTokens, signal: controller.signal });
     } catch (error) {
       if (error?.name === "AbortError") sawTimeout = true;
       else if (attempt === modelAttempts.length - 1) throw new ApiError(502, "The AI service could not be reached.");
@@ -234,12 +240,17 @@ export async function completeJson({ system, data, maxTokens = 1800, validate, p
         response = undefined;
       }
     }
+    if (response?.status === 429) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      rateLimitRetryAfter = Math.max(rateLimitRetryAfter, Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);
+      rateLimitedModels.add(model);
+    }
     if (response && (response.status === 401 || response.status === 403 || !retryableStatuses.has(response.status))) break;
     if (attempt === modelAttempts.length - 1) break;
 
     // A stalled request already spent its latency budget, so try the fallback
     // immediately. Provider errors receive a short, bounded backoff.
-    if (!sawTimeout) {
+    if (!sawTimeout && response?.status !== 429) {
       const delay = retryDelay(response, attempt);
       if (Date.now() + delay < deadline) await wait(delay);
     }
@@ -255,9 +266,9 @@ export async function completeJson({ system, data, maxTokens = 1800, validate, p
   }
 
   if (!response.ok) {
-    const retryAfter = response.headers.get("retry-after");
     if (response.status === 429) {
-      throw new ApiError(429, `The free AI demo is busy.${retryAfter ? ` Try again in ${retryAfter} seconds.` : " Try again shortly."}`);
+      const retryAfter = rateLimitRetryAfter || 30;
+      throw new ApiError(429, `The free AI demo is busy. Try again in ${retryAfter} seconds.`, retryAfter);
     }
     if (response.status === 401 || response.status === 403) {
       throw new ApiError(503, "The live AI credential needs attention.");
@@ -288,7 +299,9 @@ export function withApi(handler, scope) {
       context.error(error);
       const status = error instanceof ApiError ? error.status : 500;
       const message = error instanceof ApiError ? error.message : "Unexpected server error.";
-      return json(status, { error: message }, { "X-RateLimit-Remaining": String(rate.remaining) });
+      const headers = { "X-RateLimit-Remaining": String(rate.remaining) };
+      if (error instanceof ApiError && error.retryAfter > 0) headers["Retry-After"] = String(error.retryAfter);
+      return json(status, { error: message }, headers);
     }
   };
 }
