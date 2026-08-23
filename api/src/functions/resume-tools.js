@@ -1,7 +1,7 @@
 import { app } from "@azure/functions";
 import { createHash } from "node:crypto";
 import { ApiError, arrayOfText, completeJson, multilineText, readBody, text, withApi } from "../lib/ai.js";
-import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
+import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
 
 const actions = new Set(["review", "cover-letter"]);
 
@@ -68,7 +68,7 @@ app.http("resumeTools", {
       attemptTimeoutMs: action === "review" ? 24_000 : undefined,
       totalTimeoutMs: action === "review" ? 42_000 : undefined,
       validate: action === "review"
-        ? (value) => Array.isArray(value?.changes) && value.changes.length >= 4 && value.changes.some(completeRecommendation) && Array.isArray(value?.evaluationCriteria) && value.evaluationCriteria.length >= 5
+        ? (value) => Array.isArray(value?.changes) && value.changes.length >= 4 && value.changes.some(completeRecommendation) && hasCompleteEvaluationCriteria(value?.evaluationCriteria, lockedCriteria)
         : undefined,
     });
 

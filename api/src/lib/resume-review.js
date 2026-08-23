@@ -30,7 +30,35 @@ function rubricCategory(value) {
 }
 
 function safeStatus(value, fallback = "missing") {
-  return Object.hasOwn(statusValue, value) ? value : fallback;
+  const normalized = compact(value, 20).toLowerCase();
+  return Object.hasOwn(statusValue, normalized) ? normalized : fallback;
+}
+
+export function hasCompleteEvaluationCriteria(rawCriteria, previousCriteria = []) {
+  if (!Array.isArray(rawCriteria)) return false;
+  const expectedCount = resumeScoringRubric.length * 2;
+  if (rawCriteria.length !== expectedCount) return false;
+
+  const normalized = rawCriteria.map((item) => ({
+    id: compact(item?.id, 60),
+    category: rubricCategory(item?.category),
+    requirement: compact(item?.requirement, 260),
+    status: compact(item?.status, 20).toLowerCase(),
+    projectedStatus: compact(item?.projectedStatus, 20).toLowerCase(),
+  }));
+  if (normalized.some((item) => !item.id || !item.category || !item.requirement
+    || !Object.hasOwn(statusValue, item.status) || !Object.hasOwn(statusValue, item.projectedStatus))) return false;
+  if (new Set(normalized.map((item) => item.id)).size !== expectedCount) return false;
+
+  const priorIds = Array.isArray(previousCriteria)
+    ? previousCriteria.map((item) => compact(item?.id, 60)).filter(Boolean)
+    : [];
+  if (priorIds.length) {
+    const returnedIds = new Set(normalized.map((item) => item.id));
+    return priorIds.every((id) => returnedIds.has(id))
+      && resumeScoringRubric.every((rubric) => normalized.filter((item) => item.category === rubric.category).length === 2);
+  }
+  return resumeScoringRubric.every((rubric) => normalized.filter((item) => item.category === rubric.category).length === 2);
 }
 
 function statusFromScore(score, maxScore) {
@@ -46,7 +74,7 @@ export function normalizeEvaluationCriteria(rawCriteria, previousCriteria = [], 
       id: compact(item?.id, 60) || `criterion-${index + 1}`,
       category: rubricCategory(item?.category),
       requirement: compact(item?.requirement, 260),
-      importance: ["required", "preferred", "quality"].includes(item?.importance) ? item.importance : "quality",
+      importance: ["required", "preferred", "quality"].includes(compact(item?.importance, 20).toLowerCase()) ? compact(item?.importance, 20).toLowerCase() : "quality",
       status,
       projectedStatus: statusValue[requestedProjection] < statusValue[status] ? status : requestedProjection,
       evidence: compact(item?.evidence, 500),
@@ -58,8 +86,10 @@ export function normalizeEvaluationCriteria(rawCriteria, previousCriteria = [], 
   const rawById = new Map(raw.map((item) => [item.id, item]));
 
   const criteria = previous.length
-    ? previous.map((prior, index) => {
-      const assessed = rawById.get(prior.id) || raw[index] || prior;
+    ? previous.map((prior) => {
+      // A positional fallback can apply an unrelated criterion's status after a
+      // model changes IDs. Locked comparisons are safe only when IDs match.
+      const assessed = rawById.get(prior.id) || prior;
       const priorStillSupported = prior.evidence && resumeContainsEvidence(resumeEvidence, prior.evidence);
       const assessedStatus = safeStatus(assessed.status, prior.status);
       const status = priorStillSupported && statusValue[assessedStatus] < statusValue[prior.status] ? prior.status : assessedStatus;
