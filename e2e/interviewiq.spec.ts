@@ -139,6 +139,13 @@ test("Resume Studio shows a retry countdown when the free AI quota is busy", asy
 test("mobile layout prioritizes the target job and collapses saved applications", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/resume/");
+  const toolSwitcher = page.getByRole("navigation", { name: "InterviewIQ tools" });
+  const resumeStudioLink = toolSwitcher.getByRole("link", { name: "Resume Studio" });
+  const [switcherBox, resumeLinkBox] = await Promise.all([toolSwitcher.boundingBox(), resumeStudioLink.boundingBox()]);
+  expect(switcherBox).not.toBeNull();
+  expect(resumeLinkBox).not.toBeNull();
+  expect(resumeLinkBox!.x + resumeLinkBox!.width).toBeLessThanOrEqual(switcherBox!.x + switcherBox!.width);
+  expect(await resumeStudioLink.evaluate((link) => link.scrollWidth <= link.clientWidth)).toBe(true);
   await page.getByRole("button", { name: "Light" }).click();
   await expect(page.getByRole("button", { name: "Dark" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "InterviewIQ tools" })).toBeVisible();
@@ -149,6 +156,32 @@ test("mobile layout prioritizes the target job and collapses saved applications"
   await jobUrl.fill("https://example.com/jobs/software-developer");
   await page.getByRole("button", { name: "Start new" }).click();
   await expect(jobUrl).toHaveValue("");
+});
+
+test("Resume Studio actions stay inside their panels in phone landscape", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/resume/");
+
+  const savedPanel = page.locator(".application-memory-panel");
+  const profilePanel = page.locator(".candidate-profile-panel");
+  const startNew = savedPanel.getByRole("button", { name: "Start new" });
+  const createProfile = profilePanel.getByRole("button", { name: "Create profile" });
+
+  for (const [panel, action] of [[savedPanel, startNew], [profilePanel, createProfile]] as const) {
+    const [panelBox, actionBox] = await Promise.all([panel.boundingBox(), action.boundingBox()]);
+    expect(panelBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(actionBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
+    expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(panelBox!.x + panelBox!.width);
+  }
+
+  await createProfile.click();
+  await expect(profilePanel.getByRole("button", { name: "Hide profile" })).toBeVisible();
+  const [profileBox, hideProfileBox] = await Promise.all([
+    profilePanel.boundingBox(),
+    profilePanel.getByRole("button", { name: "Hide profile" }).boundingBox(),
+  ]);
+  expect(hideProfileBox!.x + hideProfileBox!.width).toBeLessThanOrEqual(profileBox!.x + profileBox!.width);
 });
 
 test("Coding Practice gates progression on passing tests and unlocks support after three failures", async ({ page }) => {
