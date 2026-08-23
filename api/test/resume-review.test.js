@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
+import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -121,6 +121,35 @@ test("awards proportional credit when every rubric category has partial evidence
   assert.equal(scoreEvaluationCriteria(criteria).score, 71);
 });
 
+test("requires two complete scoring criteria in every rubric category", () => {
+  const complete = resumeScoringRubric.flatMap((item, categoryIndex) => [0, 1].map((criterionIndex) => ({
+    id: `criterion-${categoryIndex}-${criterionIndex}`,
+    category: item.category,
+    requirement: `${item.category} criterion ${criterionIndex + 1}`,
+    importance: "quality",
+    status: "partial",
+    projectedStatus: "met",
+  })));
+  assert.equal(hasCompleteEvaluationCriteria(complete), true);
+  assert.equal(hasCompleteEvaluationCriteria(complete.slice(0, 5)), false);
+  assert.equal(hasCompleteEvaluationCriteria(complete.map((item, index) => index === 0 ? { ...item, status: "unknown" } : item)), false);
+});
+
+test("normalizes capitalization in model-provided scoring statuses", () => {
+  const criteria = resumeScoringRubric.map((item, index) => ({
+    id: `capitalized-${index}`,
+    category: item.category,
+    requirement: item.category,
+    importance: "quality",
+    status: "Met",
+    projectedStatus: "MET",
+    evidence: "Verified evidence",
+    explanation: "",
+  }));
+  const normalized = normalizeEvaluationCriteria(criteria);
+  assert.equal(scoreEvaluationCriteria(normalized).score, 100);
+});
+
 test("locks criteria and preserves earned credit while its exact evidence remains", () => {
   const previous = [{
     id: "required-react",
@@ -138,4 +167,27 @@ test("locks criteria and preserves earned credit while its exact evidence remain
   assert.equal(criterion.requirement, "Build accessible React applications");
   assert.equal(criterion.status, "met");
   assert.equal(criterion.evidence, "Built accessible React applications");
+});
+
+test("locked criteria never inherit statuses from changed IDs by array position", () => {
+  const previous = [{
+    id: "required-react",
+    category: "Required qualifications",
+    requirement: "Build accessible React applications",
+    importance: "required",
+    status: "met",
+    projectedStatus: "met",
+    evidence: "Built accessible React applications",
+    explanation: "Direct evidence",
+  }];
+  const unrelated = [{
+    ...previous[0],
+    id: "different-id",
+    status: "missing",
+    projectedStatus: "missing",
+    evidence: "",
+  }];
+  const normalized = normalizeEvaluationCriteria(unrelated, previous, "A substantially rewritten resume.");
+  const criterion = normalized.find((item) => item.id === "required-react");
+  assert.equal(criterion.status, "met");
 });
