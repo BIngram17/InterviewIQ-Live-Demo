@@ -8,7 +8,11 @@ test("main sidebar keeps all three product destinations visible", async ({ page 
   await page.goto("/");
   const sidebar = page.locator(".sidebar");
   const resumeLink = sidebar.getByRole("link", { name: "Resume Studio" });
+  const codingPracticeLink = sidebar.getByRole("link", { name: "Coding Practice" });
   await expect(resumeLink).toBeVisible();
+  await expect(codingPracticeLink).toHaveText("Coding Practice");
+  const codingLabelFits = await codingPracticeLink.evaluate((link) => link.scrollWidth <= link.clientWidth);
+  expect(codingLabelFits).toBe(true);
   const [sidebarBox, resumeBox] = await Promise.all([sidebar.boundingBox(), resumeLink.boundingBox()]);
   expect(sidebarBox).not.toBeNull();
   expect(resumeBox).not.toBeNull();
