@@ -132,6 +132,28 @@ test("completeJson gives the fallback a fresh timeout after a stalled primary", 
   assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
 });
 
+test("completeJson supports a longer request-specific timeout for large structured responses", async () => {
+  globalThis.fetch = (_url, options) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"review":"complete"}' }] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } })), 130);
+    options.signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+
+  const result = await completeJson({
+    system: "Return a large review.",
+    data: {},
+    maxAttempts: 1,
+    attemptTimeoutMs: 180,
+    totalTimeoutMs: 220,
+  });
+
+  assert.deepEqual(result, { review: "complete" });
+});
+
 test("completeJson can use the faster fallback model first for latency-sensitive requests", async () => {
   let requestedUrl = "";
   globalThis.fetch = async (url) => {

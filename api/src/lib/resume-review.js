@@ -11,7 +11,10 @@ export const resumeScoringRubric = [
   { category: "Clarity and ATS readability", maxScore: 10 },
 ];
 
-const statusValue = { missing: 0, partial: 0.5, met: 1 };
+// Partial evidence should receive meaningful credit without being treated as a
+// full match. An all-partial resume establishes a roughly 70-point baseline; moving
+// above 90 still requires nearly every criterion to be fully met.
+const statusValue = { missing: 0, partial: 0.7, met: 1 };
 
 function compact(value, maxLength) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -111,6 +114,38 @@ export function safeChangeKind(value) {
 
 export function safeChangeOperation(value) {
   return ["add", "replace", "move"].includes(value) ? value : "add";
+}
+
+export function isNoOpChange(change, resume) {
+  const normalize = (value) => String(value || "")
+    .toLowerCase()
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9+#.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const operation = safeChangeOperation(change?.operation);
+  const source = normalize(change?.sourceEvidence);
+  const example = normalize(change?.example);
+
+  if (operation === "replace" && source.length >= 8 && source === example) return true;
+  if (operation === "add" && example.length >= 8 && normalize(resume).includes(example)) return true;
+
+  if (operation === "move") {
+    const reorder = String(change?.suggestion || "").match(
+      /\b(?:move|place|put)\s+["“]?([^,"”]{1,60}?)["”]?\s+(?:to|at)\s+(?:the\s+)?(?:front|beginning|start|first)\b/i,
+    );
+    if (reorder) {
+      const requestedFirst = normalize(reorder[1]).replace(/^(?:the|a|an)\s+/, "");
+      const currentFirst = normalize(String(change?.sourceEvidence || "")
+        .replace(/^[^:]*:/, "")
+        .split(/[,;|/]/)[0]);
+      if (requestedFirst && currentFirst && (currentFirst === requestedFirst || currentFirst.startsWith(`${requestedFirst} `))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function resumeContainsEvidence(resume, evidence) {

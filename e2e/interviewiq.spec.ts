@@ -65,7 +65,7 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
       receivedLockedReview = Boolean(body.previousReview?.evaluationCriteria?.length);
     }
     await route.fulfill({ json: body.action === "review" ? {
-      action: "review", reviewFingerprint: "locked-target", headline: "Strong foundation", score: reviewCalls === 1 ? 84 : 89, previousScore: reviewCalls === 1 ? undefined : 84, scoreDelta: reviewCalls === 1 ? undefined : 5, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"], evaluationCriteria,
+      action: "review", reviewFingerprint: "locked-target", headline: "Resume Review: Python and Kubernetes Software Engineer - Data, AI/ML & Analytics", score: reviewCalls === 1 ? 84 : 89, previousScore: reviewCalls === 1 ? undefined : 84, scoreDelta: reviewCalls === 1 ? undefined : 5, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"], evaluationCriteria,
       scoreBreakdown: [{ category: "Required qualifications", score: reviewCalls === 1 ? 25 : 28, previousScore: reviewCalls === 1 ? undefined : 25, maxScore: 30, evidence: "React and Node.js are present.", improvement: "Add testing evidence." }],
       changes: [{ section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved release reliability by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info", priority: "high", scoreImpact: 5 }]
     } : { action: "cover-letter", headline: "Northstar cover letter", coverLetter: "Dear Hiring Team,\n\nI am excited to apply for the Software Developer role. My experience building React applications and Node.js APIs aligns with your needs.\n\nSincerely,\nJordan Lee", notes: ["Word count: 351 words (target: 350-375).", "Paragraph 1: 58 words.", "Verify the hiring manager name."] } });
@@ -88,6 +88,14 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await expect(page.getByText(/improve continuous delivery/)).toBeVisible();
   await page.getByLabel("Resume text").fill(`${resumeText} Reduced deployment failures by 20% through automated validation.`);
   await expect(page.getByText("Needs refresh")).toBeVisible();
+  const scoreInsidePanel = await page.locator(".resume-result-panel:not(.cover-result-panel)").evaluate((panel) => {
+    const score = panel.querySelector(".resume-score");
+    if (!score) return false;
+    const panelBox = panel.getBoundingClientRect();
+    const scoreBox = score.getBoundingClientRect();
+    return scoreBox.left >= panelBox.left && scoreBox.right <= panelBox.right;
+  });
+  expect(scoreInsidePanel).toBe(true);
   await page.getByRole("button", { name: /Regenerate review/ }).click();
   await expect(page.getByText("+5 since last review")).toBeVisible();
   expect(receivedLockedReview).toBe(true);

@@ -192,13 +192,30 @@ async function parseGeminiJson(response) {
   return JSON.parse(normalizeJsonText(content));
 }
 
-export async function completeJson({ system, data, maxTokens = 1800, validate, preferFallback = false, maxAttempts = 3 }) {
+export async function completeJson({
+  system,
+  data,
+  maxTokens = 1800,
+  validate,
+  preferFallback = false,
+  maxAttempts = 3,
+  attemptTimeoutMs,
+  totalTimeoutMs,
+}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ApiError(503, "Live AI is not configured yet.");
   }
 
-  const deadline = Date.now() + TOTAL_TIMEOUT_MS;
+  const requestAttemptTimeoutMs = Math.min(
+    120_000,
+    Math.max(100, Number(attemptTimeoutMs) || ATTEMPT_TIMEOUT_MS),
+  );
+  const requestTotalTimeoutMs = Math.min(
+    180_000,
+    Math.max(requestAttemptTimeoutMs, Number(totalTimeoutMs) || TOTAL_TIMEOUT_MS),
+  );
+  const deadline = Date.now() + requestTotalTimeoutMs;
   let response;
   let sawTimeout = false;
   let sawInvalidContent = false;
@@ -217,7 +234,7 @@ export async function completeJson({ system, data, maxTokens = 1800, validate, p
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) break;
     const controller = new AbortController();
-    const attemptTimeout = setTimeout(() => controller.abort(), Math.min(ATTEMPT_TIMEOUT_MS, remainingMs));
+    const attemptTimeout = setTimeout(() => controller.abort(), Math.min(requestAttemptTimeoutMs, remainingMs));
     try {
       response = await requestGemini({ apiKey, model, system, data, maxTokens, signal: controller.signal });
     } catch (error) {

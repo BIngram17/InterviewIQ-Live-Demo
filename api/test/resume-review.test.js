@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
+import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -29,6 +29,28 @@ test("unknown change classifications default to needs-info", () => {
 test("change operations are restricted to add, replace, or move", () => {
   assert.equal(safeChangeOperation("replace"), "replace");
   assert.equal(safeChangeOperation("delete"), "add");
+});
+
+test("rejects replacement and addition recommendations that do not change the resume", () => {
+  const resume = "Languages: Python, TypeScript, JavaScript, C#, Dart, SQL";
+  assert.equal(isNoOpChange({ operation: "replace", sourceEvidence: resume, example: resume }, resume), true);
+  assert.equal(isNoOpChange({ operation: "add", example: resume }, resume), true);
+});
+
+test("rejects a recommendation to move an item to the position it already occupies", () => {
+  const resume = "Languages: Python, TypeScript, JavaScript, C#, Dart, SQL";
+  assert.equal(isNoOpChange({
+    operation: "move",
+    sourceEvidence: resume,
+    suggestion: "Move Python to the front of the Languages skill line.",
+    example: resume,
+  }, resume), true);
+  assert.equal(isNoOpChange({
+    operation: "move",
+    sourceEvidence: resume,
+    suggestion: "Move SQL to the front of the Languages skill line.",
+    example: "Languages: SQL, Python, TypeScript, JavaScript, C#, Dart",
+  }, resume), false);
 });
 
 test("safe rewrites require matching evidence from the resume", () => {
@@ -83,6 +105,20 @@ test("calculates the resume score from the fixed five-category rubric", () => {
   const result = scoreEvaluationCriteria(criteria);
   assert.equal(result.score, 100);
   assert.deepEqual(result.breakdown.map((item) => item.maxScore), [30, 25, 20, 15, 10]);
+});
+
+test("awards proportional credit when every rubric category has partial evidence", () => {
+  const criteria = resumeScoringRubric.map((item, index) => ({
+    id: `partial-${index}`,
+    category: item.category,
+    requirement: item.category,
+    importance: "quality",
+    status: "partial",
+    projectedStatus: "partial",
+    evidence: "Some relevant evidence",
+    explanation: "More specificity would make this a full match.",
+  }));
+  assert.equal(scoreEvaluationCriteria(criteria).score, 71);
 });
 
 test("locks criteria and preserves earned credit while its exact evidence remains", () => {
