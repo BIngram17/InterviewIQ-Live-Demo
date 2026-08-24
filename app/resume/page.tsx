@@ -6,7 +6,7 @@ import CopyButton from "../components/CopyButton";
 import ProductSwitcher from "../components/ProductSwitcher";
 import JobUrlImporter, { ImportedJob } from "../components/JobUrlImporter";
 
-type Change = { section: string; operation?: "add" | "replace" | "move"; placement?: string; sourceEvidence?: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
+type Change = { criterionId?: string; section: string; operation?: "add" | "replace" | "move"; placement?: string; sourceEvidence?: string; currentIssue: string; suggestion: string; example: string; relatedRequirement?: string; kind?: "rewrite" | "needs-info"; priority?: "high" | "medium" | "low"; scoreImpact?: number };
 type EvaluationCriterion = { id: string; category: string; requirement: string; importance: "required" | "preferred" | "quality"; status: "met" | "partial" | "missing"; projectedStatus: "met" | "partial" | "missing"; evidence: string; explanation: string };
 type ScoreBreakdown = { category: string; score: number; maxScore: number; previousScore?: number; evidence: string; improvement: string };
 type ResumeResult = {
@@ -353,7 +353,7 @@ export default function ResumeStudio() {
     setBusy(true);
     setStatus("");
     const previousReview = action === "review" && reviewResult?.evaluationCriteria?.length
-      ? { reviewFingerprint: reviewResult.reviewFingerprint, evaluationCriteria: reviewResult.evaluationCriteria, scoreBreakdown: reviewResult.scoreBreakdown }
+      ? { reviewFingerprint: reviewResult.reviewFingerprint, evaluationCriteria: reviewResult.evaluationCriteria, scoreBreakdown: reviewResult.scoreBreakdown, changes: reviewResult.changes }
       : undefined;
     try {
       const response = await fetch("/api/resume-tools", {

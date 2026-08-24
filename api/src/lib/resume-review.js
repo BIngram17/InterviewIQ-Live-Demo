@@ -123,6 +123,56 @@ export function normalizeEvaluationCriteria(rawCriteria, previousCriteria = [], 
   return criteria.slice(0, 20);
 }
 
+function sameRequirement(left, right) {
+  const normalize = (value) => compact(value, 300).toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim();
+  const first = normalize(left);
+  const second = normalize(right);
+  return first.length >= 8 && second.length >= 8 && (first.includes(second) || second.includes(first));
+}
+
+export function applyPreviousRecommendationCredit(criteria, previousCriteria = [], previousChanges = [], resumeEvidence = "") {
+  if (!Array.isArray(criteria) || !Array.isArray(previousCriteria) || !Array.isArray(previousChanges)) return criteria;
+  const priorById = new Map(previousCriteria.map((item) => [compact(item?.id, 60), item]));
+  const appliedFloors = new Map();
+
+  for (const change of previousChanges) {
+    const example = compact(change?.example, 700);
+    if (!example || endsWithOmission(example) || !resumeContainsEvidence(resumeEvidence, example)) continue;
+    const requestedId = compact(change?.criterionId, 60);
+    const sourceEvidence = compact(change?.sourceEvidence, 700);
+    const relatedRequirement = compact(change?.relatedRequirement, 360);
+    const prior = priorById.get(requestedId) || previousCriteria.find((criterion) => (
+      (sourceEvidence && criterion?.evidence && (
+        resumeContainsEvidence(sourceEvidence, criterion.evidence)
+        || resumeContainsEvidence(criterion.evidence, sourceEvidence)
+      ))
+      || sameRequirement(relatedRequirement, criterion?.requirement)
+    ));
+    if (!prior?.id) continue;
+
+    const canEarnProjectedCredit = change?.kind === "rewrite" && !/\[[^\]]+\]/.test(example);
+    const floor = safeStatus(canEarnProjectedCredit ? prior.projectedStatus : prior.status, prior.status);
+    const existing = appliedFloors.get(prior.id);
+    if (!existing || statusValue[floor] > statusValue[existing.status]) {
+      appliedFloors.set(prior.id, { status: floor, evidence: example });
+    }
+  }
+
+  return criteria.map((criterion) => {
+    const applied = appliedFloors.get(criterion.id);
+    if (!applied || statusValue[safeStatus(criterion.status)] >= statusValue[applied.status]) return criterion;
+    return {
+      ...criterion,
+      status: applied.status,
+      projectedStatus: statusValue[safeStatus(criterion.projectedStatus, applied.status)] < statusValue[applied.status]
+        ? applied.status
+        : safeStatus(criterion.projectedStatus, applied.status),
+      evidence: applied.evidence,
+      explanation: "Credit preserved because the prior review's exact recommended text is present.",
+    };
+  });
+}
+
 export function scoreEvaluationCriteria(criteria, statusField = "status") {
   const breakdown = resumeScoringRubric.map((rubric) => {
     const items = criteria.filter((item) => item.category === rubric.category);
