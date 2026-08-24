@@ -1,7 +1,7 @@
 import { app } from "@azure/functions";
 import { createHash } from "node:crypto";
 import { ApiError, arrayOfText, completeJson, multilineText, readBody, text, withApi } from "../lib/ai.js";
-import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
+import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
 
 const actions = new Set(["review", "cover-letter"]);
 
@@ -38,9 +38,10 @@ app.http("resumeTools", {
     const lockedCriteria = hasMatchingPreviousReview
       ? normalizeEvaluationCriteria(body.previousReview.evaluationCriteria, [], `${resume}\n${Object.values(candidateProfile).join("\n")}`, body.previousReview.scoreBreakdown)
       : [];
+    const previousChanges = hasMatchingPreviousReview && Array.isArray(body.previousReview?.changes) ? body.previousReview.changes : [];
 
     const instruction = action === "review"
-      ? `Perform a rigorous, job-specific resume review using this fixed rubric: required qualifications 30 points, relevant experience and seniority 25, skills and ATS terminology 20, quantified impact and evidence 15, clarity and ATS readability 10. The server calculates the score and category breakdown from the evaluation criteria, so do not return a scoreBreakdown. A score above 90 requires clear evidence for nearly every must-have requirement; never treat a preferred qualification as required. Produce exactly 6 prioritized changes ordered by likely score impact. Each change must target a specific unmatched or under-evidenced job requirement, include priority high/medium/low and scoreImpact 1-10, and avoid generic advice. Never insert or claim a skill, tool, certification, responsibility, metric, or achievement unless it is explicitly present in the resume. A skill found only in the job description is unconfirmed: place it only in gaps or ATS keywords to verify, never in a rewrite or example as if the candidate has it. Preserve every skill already listed in the resume. Never recommend deleting a skill; when prioritizing, use operation "move" to place less relevant skills later or under an Additional Skills label. Compare every date to currentDate: dates before currentDate are historical, not future. Never change "conferred," "graduated," "completed," or "awarded" to "expected." Do not recommend changing an already-completed degree to an expected degree. When education status or any factual status is ambiguous, use kind "needs-info" and ask the candidate to confirm it; never guess. Every change must cite one relevant requirement from the supplied job description. For each change choose operation "add", "replace", or "move"; give an exact placement identifying the resume section and the nearby heading, bullet, or line; and copy a short exact sourceEvidence quote from the resume that supports the proposed wording. For replacements, sourceEvidence must be the exact text being replaced. For moves, it must be the exact text being moved. Use kind "rewrite" only when the entire example is supported by sourceEvidence and other explicit resume facts. Use "needs-info" when the candidate must provide or confirm any missing fact, skill, or metric, and make the example a fill-in template rather than fabricating. Keep the summary under 100 words, arrays to four concise items, and criterion evidence and explanations to one concise sentence each. Return complete text for every field. Never abbreviate, omit text, or end placement, sourceEvidence, currentIssue, suggestion, example, or relatedRequirement with three dots or an ellipsis. Return JSON with shape {"headline":string,"summary":string,"strengths":string[],"gaps":string[],"atsKeywords":string[],"nextSteps":string[],"evaluationCriteria":[{"id":string,"category":string,"requirement":string,"importance":"required"|"preferred"|"quality","status":"met"|"partial"|"missing","projectedStatus":"met"|"partial"|"missing","evidence":string,"explanation":string}],"changes":[{"section":string,"operation":"add"|"replace"|"move","placement":string,"sourceEvidence":string,"currentIssue":string,"suggestion":string,"example":string,"relatedRequirement":string,"kind":"rewrite"|"needs-info","priority":"high"|"medium"|"low","scoreImpact":number 1-10}]}.`
+      ? `Perform a rigorous, job-specific resume review using this fixed rubric: required qualifications 30 points, relevant experience and seniority 25, skills and ATS terminology 20, quantified impact and evidence 15, clarity and ATS readability 10. The server calculates the score and category breakdown from the evaluation criteria, so do not return a scoreBreakdown. A score above 90 requires clear evidence for nearly every must-have requirement; never treat a preferred qualification as required. Produce exactly 6 prioritized changes ordered by likely score impact. Each change must target a specific unmatched or under-evidenced job requirement, include the exact criterionId it improves, include priority high/medium/low and scoreImpact 1-10, and avoid generic advice. Never insert or claim a skill, tool, certification, responsibility, metric, or achievement unless it is explicitly present in the resume. A skill found only in the job description is unconfirmed: place it only in gaps or ATS keywords to verify, never in a rewrite or example as if the candidate has it. Preserve every skill already listed in the resume. Never recommend deleting a skill; when prioritizing, use operation "move" to place less relevant skills later or under an Additional Skills label. Compare every date to currentDate: dates before currentDate are historical, not future. Never change "conferred," "graduated," "completed," or "awarded" to "expected." Do not recommend changing an already-completed degree to an expected degree. When education status or any factual status is ambiguous, use kind "needs-info" and ask the candidate to confirm it; never guess. Every change must cite one relevant requirement from the supplied job description. For each change choose operation "add", "replace", or "move"; give an exact placement identifying the resume section and the nearby heading, bullet, or line; and copy a short exact sourceEvidence quote from the resume that supports the proposed wording. For replacements, sourceEvidence must be the exact text being replaced. For moves, it must be the exact text being moved. Use kind "rewrite" only when the entire example is supported by sourceEvidence and other explicit resume facts. Use "needs-info" when the candidate must provide or confirm any missing fact, skill, or metric, and make the example a fill-in template rather than fabricating. Keep the summary under 100 words, arrays to four concise items, and criterion evidence and explanations to one concise sentence each. Return complete text for every field. Never abbreviate, omit text, or end placement, sourceEvidence, currentIssue, suggestion, example, or relatedRequirement with three dots or an ellipsis. Return JSON with shape {"headline":string,"summary":string,"strengths":string[],"gaps":string[],"atsKeywords":string[],"nextSteps":string[],"evaluationCriteria":[{"id":string,"category":string,"requirement":string,"importance":"required"|"preferred"|"quality","status":"met"|"partial"|"missing","projectedStatus":"met"|"partial"|"missing","evidence":string,"explanation":string}],"changes":[{"criterionId":string,"section":string,"operation":"add"|"replace"|"move","placement":string,"sourceEvidence":string,"currentIssue":string,"suggestion":string,"example":string,"relatedRequirement":string,"kind":"rewrite"|"needs-info","priority":"high"|"medium"|"low","scoreImpact":number 1-10}]}.`
       : `Write a specific ${coverVoice} cover letter using only facts present in the resume. The cover letter must be ${coverTarget} words so it fills or closely approaches one page in Times New Roman 12-point type with one-inch margins. Use exactly five substantive paragraphs: a 55-65 word opening, three 75-85 word evidence-based fit paragraphs, and a 45-55 word closing. Count the words before responding and revise internally if the complete letter is outside 325-400 words. Include the supplied company and job title naturally. Prioritize concrete alignment over generic enthusiasm, and do not pad the letter with repetition or invented facts. Separate paragraphs with blank lines. Notes must contain only a specific unresolved fact or placeholder the candidate needs to verify before sending; otherwise return an empty notes array. Never put word counts, paragraph counts, target ranges, formatting summaries, or generic advice in notes. Return JSON with shape {"headline":string,"coverLetter":string,"notes":string[]}.`;
 
     const candidateProfileInstruction = "The candidateProfile contains facts the user explicitly confirmed from current or previous resumes. It is approved evidence in addition to the current resume, overriding any narrower resume-only evidence wording above. You may use those facts as evidence, but nothing else. For sourceEvidence, copy exact text from either resume or candidateProfile. For a needs-info change, quote the nearest existing resume context and keep every unconfirmed fact inside square brackets. Never treat a job-description skill as confirmed. Preserve all skills already present in the resume; do not recommend deleting any skill. Return complete recommendation text without ellipses or omitted endings.";
@@ -48,10 +49,10 @@ app.http("resumeTools", {
       ? "Every recommendation must materially change the resume as it currently exists. Before recommending a reorder, verify the requested item is not already in that position. For a move, use a destination that differs from the current location. For a replacement, the example must differ from sourceEvidence. For an addition, the example must not already appear in the resume."
       : "";
     const criteriaInstruction = action === "review"
-      ? "Return evaluationCriteria with exactly two concise criteria for each of the five rubric categories. Each criterion must contain id, category, requirement, importance (required, preferred, or quality), status (met, partial, or missing), projectedStatus, evidence, and explanation. Evidence must be a short exact quote from the resume or Candidate Profile; use an empty string when evidence is missing. projectedStatus represents the result after every supplied safe rewrite and every truthfully completed needs-info item. If lockedCriteria is non-empty, preserve its exact IDs, categories, requirements, and importance values and reassess only status, projectedStatus, evidence, and explanation. Do not add, remove, merge, or reinterpret locked criteria. The server calculates the final score from these statuses, so do not manipulate criteria to force a higher or lower result."
+      ? "Return evaluationCriteria with exactly two concise criteria for each of the five rubric categories. Each criterion must contain id, category, requirement, importance (required, preferred, or quality), status (met, partial, or missing), projectedStatus, evidence, and explanation. Every change must use a criterionId copied exactly from one returned evaluation criterion. Evidence must be a short exact quote from the resume or Candidate Profile; use an empty string when evidence is missing. projectedStatus represents the result after every supplied safe rewrite and every truthfully completed needs-info item. If lockedCriteria is non-empty, preserve its exact IDs, categories, requirements, and importance values and reassess only status, projectedStatus, evidence, and explanation. Do not add, remove, merge, or reinterpret locked criteria. The server calculates the final score from these statuses, so do not manipulate criteria to force a higher or lower result."
       : "";
     const completeRecommendation = (change) => {
-      const requiredText = ["section", "placement", "sourceEvidence", "currentIssue", "suggestion", "example", "relatedRequirement"];
+      const requiredText = ["criterionId", "section", "placement", "sourceEvidence", "currentIssue", "suggestion", "example", "relatedRequirement"];
       const hasCompleteText = requiredText.every((field) => typeof change?.[field] === "string" && change[field].trim() && !endsWithOmission(change[field]));
       const preservesSkills = !requestsSkillDeletion(change) && !(/skills?/i.test(change?.section || "") && change?.operation === "replace");
       const hasSafeNeedsInfoTemplate = change?.kind !== "needs-info" || /\[[^\]]+\]/.test(change?.example || "");
@@ -68,16 +69,25 @@ app.http("resumeTools", {
       attemptTimeoutMs: action === "review" ? 24_000 : undefined,
       totalTimeoutMs: action === "review" ? 42_000 : undefined,
       validate: action === "review"
-        ? (value) => Array.isArray(value?.changes) && value.changes.length >= 4 && value.changes.some(completeRecommendation) && hasCompleteEvaluationCriteria(value?.evaluationCriteria, lockedCriteria)
+        ? (value) => {
+          const criterionIds = new Set(Array.isArray(value?.evaluationCriteria) ? value.evaluationCriteria.map((item) => text(item?.id, 60)) : []);
+          const validChanges = Array.isArray(value?.changes)
+            ? value.changes.filter((change) => completeRecommendation(change) && criterionIds.has(text(change?.criterionId, 60)))
+            : [];
+          return validChanges.length >= 4
+            && hasCompleteEvaluationCriteria(value?.evaluationCriteria, lockedCriteria);
+        }
         : undefined,
     });
 
     if (action === "review") {
       const returnedChanges = Array.isArray(raw?.changes) ? raw.changes : null;
-      const changes = returnedChanges ? returnedChanges.slice(0, 10).filter(completeRecommendation).filter((change) => !mislabelsCompletedPastDate(change, resume)).map((change) => {
+      const rawCriterionIds = new Set(Array.isArray(raw?.evaluationCriteria) ? raw.evaluationCriteria.map((item) => text(item?.id, 60)) : []);
+      const changes = returnedChanges ? returnedChanges.slice(0, 10).filter(completeRecommendation).filter((change) => rawCriterionIds.has(text(change?.criterionId, 60))).filter((change) => !mislabelsCompletedPastDate(change, resume)).map((change) => {
         const sourceEvidence = text(change?.sourceEvidence, 700);
         const requestedKind = safeChangeKind(change?.kind);
         return {
+          criterionId: text(change?.criterionId, 60),
           section: text(change?.section, 80),
           operation: safeChangeOperation(change?.operation),
           placement: text(change?.placement, 360),
@@ -92,11 +102,17 @@ app.http("resumeTools", {
         };
       }).filter((change) => change.section && change.placement && change.suggestion) : [];
       if (!returnedChanges) throw new ApiError(502, "The AI did not return the targeted resume changes. Please try again.");
-      const evaluationCriteria = normalizeEvaluationCriteria(
+      const normalizedCriteria = normalizeEvaluationCriteria(
         raw?.evaluationCriteria,
         lockedCriteria,
         `${resume}\n${Object.values(candidateProfile).join("\n")}`,
         raw?.scoreBreakdown,
+      );
+      const evaluationCriteria = applyPreviousRecommendationCredit(
+        normalizedCriteria,
+        lockedCriteria,
+        previousChanges,
+        `${resume}\n${Object.values(candidateProfile).join("\n")}`,
       );
       const currentScoring = scoreEvaluationCriteria(evaluationCriteria);
       const projectedScoring = scoreEvaluationCriteria(evaluationCriteria, "projectedStatus");

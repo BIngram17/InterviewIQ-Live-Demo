@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
+import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -190,4 +190,55 @@ test("locked criteria never inherit statuses from changed IDs by array position"
   const normalized = normalizeEvaluationCriteria(unrelated, previous, "A substantially rewritten resume.");
   const criterion = normalized.find((item) => item.id === "required-react");
   assert.equal(criterion.status, "met");
+});
+
+test("an applied verified rewrite earns its previously projected criterion credit", () => {
+  const previous = [{
+    id: "impact-ci",
+    category: "Quantified impact and evidence",
+    requirement: "Show measurable CI/CD impact",
+    importance: "quality",
+    status: "partial",
+    projectedStatus: "met",
+    evidence: "Improved deployment reliability",
+    explanation: "Add the verified outcome.",
+  }];
+  const reassessed = [{ ...previous[0], status: "missing", evidence: "" }];
+  const recommendation = [{
+    criterionId: "impact-ci",
+    kind: "rewrite",
+    sourceEvidence: "Improved deployment reliability",
+    relatedRequirement: "Show measurable CI/CD impact",
+    example: "Reduced deployment failures by 20% through automated validation.",
+  }];
+  const result = applyPreviousRecommendationCredit(reassessed, previous, recommendation, recommendation[0].example);
+  assert.equal(result[0].status, "met");
+  assert.equal(result[0].evidence, recommendation[0].example);
+});
+
+test("an applied needs-info template preserves prior credit without awarding projected credit", () => {
+  const previous = [{
+    id: "impact-ci",
+    category: "Quantified impact and evidence",
+    requirement: "Show measurable CI/CD impact",
+    importance: "quality",
+    status: "partial",
+    projectedStatus: "met",
+    evidence: "Improved deployment reliability",
+    explanation: "Confirm the outcome.",
+  }];
+  const recommendation = [{
+    criterionId: "impact-ci",
+    kind: "needs-info",
+    sourceEvidence: "Improved deployment reliability",
+    relatedRequirement: "Show measurable CI/CD impact",
+    example: "Reduced deployment failures by [verified percentage] through automated validation.",
+  }];
+  const result = applyPreviousRecommendationCredit(
+    [{ ...previous[0], status: "missing", evidence: "" }],
+    previous,
+    recommendation,
+    recommendation[0].example,
+  );
+  assert.equal(result[0].status, "partial");
 });
