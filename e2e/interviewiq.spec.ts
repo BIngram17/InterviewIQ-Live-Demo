@@ -53,6 +53,7 @@ test("saved interview sessions are collapsed until requested", async ({ page }) 
 test("Resume Studio completes and remembers a tailored application", async ({ page }) => {
   let reviewCalls = 0;
   let receivedLockedReview = false;
+  let receivedEmphasisSetting = false;
   const evaluationCriteria = [
     ["Required qualifications", "Required React experience", "required"],
     ["Relevant experience and seniority", "Relevant software delivery", "quality"],
@@ -67,11 +68,12 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
     if (body.action === "review") {
       reviewCalls += 1;
       receivedLockedReview = Boolean(body.previousReview?.evaluationCriteria?.length);
+      receivedEmphasisSetting = body.emphasizeKeywords === true;
     }
     await route.fulfill({ json: body.action === "review" ? {
       action: "review", reviewFingerprint: "locked-target", headline: "Resume Review: Python and Kubernetes Software Engineer - Data, AI/ML & Analytics", score: reviewCalls === 1 ? 84 : 89, previousScore: reviewCalls === 1 ? undefined : 84, scoreDelta: reviewCalls === 1 ? undefined : 5, projectedScore: 93, summary: "Good role alignment.", strengths: ["React delivery"], gaps: ["Add testing detail"], atsKeywords: ["React", "Node.js"], nextSteps: ["Quantify impact"], evaluationCriteria,
       scoreBreakdown: [{ category: "Required qualifications", score: reviewCalls === 1 ? 25 : 28, previousScore: reviewCalls === 1 ? undefined : 25, maxScore: 30, evidence: "React and Node.js are present.", improvement: "Add testing evidence." }],
-      changes: [{ section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved release reliability by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info", priority: "high", scoreImpact: 5 }]
+      changes: [{ criterionId: "criterion-3", section: "Experience", currentIssue: "Impact is unclear", suggestion: "Add a verified outcome", example: "Improved **release reliability** by [verified percentage].", relatedRequirement: "improve continuous delivery workflows", kind: "needs-info", priority: "high", scoreImpact: 5 }]
     } : { action: "cover-letter", headline: "Northstar cover letter", coverLetter: "Dear Hiring Team,\n\nI am excited to apply for the Software Developer role. My experience building React applications and Node.js APIs aligns with your needs.\n\nSincerely,\nJordan Lee", notes: ["Word count: 351 words (target: 350-375).", "Paragraph 1: 58 words.", "Verify the hiring manager name."] } });
   });
 
@@ -84,7 +86,10 @@ test("Resume Studio completes and remembers a tailored application", async ({ pa
   await page.getByRole("button", { name: "Use this target job" }).click();
   await expect(page.getByRole("heading", { name: "Software Developer at Northstar" })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles({ name: "resume.txt", mimeType: "text/plain", buffer: Buffer.from(resumeText) });
+  await page.getByRole("checkbox", { name: "Bold important keywords and phrases" }).check();
   await page.getByRole("button", { name: /Review resume/ }).click();
+  expect(receivedEmphasisSetting).toBe(true);
+  await expect(page.locator(".resume-change-card p strong").filter({ hasText: "release reliability" })).toBeVisible();
   await expect(page.getByText("Needs your confirmation")).toBeVisible();
   await expect(page.getByText("Potential fit", { exact: true })).toBeVisible();
   await expect(page.getByText("93%")).toBeVisible();

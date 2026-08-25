@@ -6,11 +6,13 @@ type CopyState = "idle" | "copied" | "failed";
 
 export default function CopyButton({
   text,
+  html,
   label = "Copy",
   copiedLabel = "Copied!",
   className = "small-action-button",
 }: {
   text: string;
+  html?: string;
   label?: string;
   copiedLabel?: string;
   className?: string;
@@ -38,7 +40,17 @@ export default function CopyButton({
     };
 
     try {
-      if (navigator.clipboard?.writeText) {
+      if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/plain": new Blob([text], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" }),
+          })]);
+        } catch {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+          else if (!copyWithSelectionFallback()) throw new Error("Copy was blocked");
+        }
+      } else if (navigator.clipboard?.writeText) {
         try {
           await navigator.clipboard.writeText(text);
         } catch {

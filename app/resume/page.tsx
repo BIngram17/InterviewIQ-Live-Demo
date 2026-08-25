@@ -52,6 +52,7 @@ type CandidateProfile = { contactDetails: string; confirmedSkills: string; exper
 
 const applicationStorageKey = "interviewiq-saved-applications-v1";
 const candidateProfileStorageKey = "interviewiq-candidate-profile-v1";
+const reviewFormattingStorageKey = "interviewiq-review-bold-keywords-v1";
 const maxSavedApplications = 24;
 const emptyCandidateProfile: CandidateProfile = { contactDetails: "", confirmedSkills: "", experienceHighlights: "", achievements: "", educationCertifications: "" };
 
@@ -69,6 +70,7 @@ export default function ResumeStudio() {
   const [isReviewStale, setIsReviewStale] = useState(false);
   const [coverResult, setCoverResult] = useState<ResumeResult | null>(null);
   const [coverTone, setCoverTone] = useState<CoverTone>("standard");
+  const [boldImportantPhrases, setBoldImportantPhrases] = useState(false);
   const [coverVersions, setCoverVersions] = useState<CoverVersion[]>([]);
   const [isReviewing, setIsReviewing] = useState(false);
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
@@ -92,8 +94,23 @@ export default function ResumeStudio() {
   const [isCandidateProfileClearPending, setIsCandidateProfileClearPending] = useState(false);
   const [candidateProfileStatus, setCandidateProfileStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reviewFormattingLoadedRef = useRef(false);
 
   useEffect(() => { document.documentElement.dataset.theme = isDarkMode ? "dark" : "light"; }, [isDarkMode]);
+
+  useEffect(() => {
+    const storedPreference = window.localStorage.getItem(reviewFormattingStorageKey) === "true";
+    const timeout = window.setTimeout(() => {
+      reviewFormattingLoadedRef.current = true;
+      setBoldImportantPhrases(storedPreference);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    if (!reviewFormattingLoadedRef.current) return;
+    window.localStorage.setItem(reviewFormattingStorageKey, String(boldImportantPhrases));
+  }, [boldImportantPhrases]);
 
   useEffect(() => {
     if (coverRetrySeconds <= 0) return;
@@ -359,7 +376,7 @@ export default function ResumeStudio() {
       const response = await fetch("/api/resume-tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone, previousReview }),
+        body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone, emphasizeKeywords: action === "review" && boldImportantPhrases, previousReview }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -512,6 +529,7 @@ export default function ResumeStudio() {
               <p className="privacy-note">The original file is not stored. Extracted text autosaves only in this browser and is sent to AI when you run a tool.</p>
               {!toolsReady && <p className="requirement-hint">Add a target job and at least 120 characters of resume text to enable AI tools.</p>}
               <button className="primary-button review-resume-button" type="button" disabled={!toolsReady || isReviewing || isExtracting} onClick={() => runTool("review")}>{isReviewing ? "Reviewing resume..." : reviewResult ? "Regenerate review + targeted changes" : "Review resume + targeted changes"}</button>
+              <label className="review-format-option"><input type="checkbox" checked={boldImportantPhrases} onChange={(event) => setBoldImportantPhrases(event.target.checked)} /><span><strong>Bold important keywords and phrases</strong><small>Formats emphasized terms in recommended examples and preserves bold styling when supported by the destination.</small></span></label>
               {resumeStatus && <p className="studio-status" role="status">{resumeStatus}</p>}
             </article>
 
@@ -543,6 +561,7 @@ export default function ResumeStudio() {
 }
 
 function ReviewResultView({ result }: { result: ResumeResult }) {
+  const allChanges = result.changes?.map((change) => `${formatOperation(change.operation)} — ${change.section}\nWhere: ${change.placement}\nChange: ${change.suggestion}\nExample: ${change.example}`).join("\n\n") || "";
   return <div className="resume-result-content">
     {result.summary && <p className="result-summary">{result.summary}</p>}
     {result.score && result.projectedScore && <section className="score-path-card"><div><span>Current fit</span><strong>{result.score}%</strong>{typeof result.scoreDelta === "number" && <small className={result.scoreDelta > 0 ? "score-delta positive" : result.scoreDelta < 0 ? "score-delta negative" : "score-delta"}>{formatScoreDelta(result.scoreDelta)} since last review</small>}</div><span className="score-path-arrow">→</span><div><span>Potential fit</span><strong>{result.projectedScore}%</strong></div><p>The current score is calculated from locked criteria for this application. Potential fit assumes every safe rewrite is applied and every requested detail is verified; it remains an estimate, not an ATS guarantee.</p></section>}
@@ -551,7 +570,7 @@ function ReviewResultView({ result }: { result: ResumeResult }) {
     <div className="result-two-column"><ResultList title="What already works" items={result.strengths} /><ResultList title="Gaps to address" items={result.gaps} /></div>
     <ResultList title="Highest-impact next steps" items={result.nextSteps} />
     {!!result.changes?.length && <section className="targeted-changes-section">
-      <div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><CopyButton text={result.changes.map((change) => `${formatOperation(change.operation)} — ${change.section}\nWhere: ${change.placement}\nChange: ${change.suggestion}\nExample: ${change.example}`).join("\n\n")} label="Copy all" copiedLabel="All copied" /></div>
+      <div className="result-section-header"><div><p className="section-label">Targeted changes</p><h3>Recommended resume edits</h3></div><CopyButton text={stripBoldMarkers(allChanges)} html={boldMarkdownToHtml(allChanges)} label="Copy all" copiedLabel="All copied" /></div>
       {result.changes.map((change, index) => <section className="resume-change-card" key={`${change.section}-${index}`}>
         <div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your confirmation" : "Uses confirmed evidence"}</span></div>
         <div className="change-placement"><span>{formatOperation(change.operation)}</span><p><strong>Where:</strong> {change.placement || `In the ${change.section} section`}</p></div>
@@ -559,7 +578,7 @@ function ReviewResultView({ result }: { result: ResumeResult }) {
         {change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}
         {change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}
         {change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>
-        {change.example && <div><strong>Example</strong><p>{change.example}</p><CopyButton text={change.example} label="Copy example" copiedLabel="Example copied" /></div>}
+        {change.example && <div><strong>Example</strong><p><BoldText text={change.example} /></p><CopyButton text={stripBoldMarkers(change.example)} html={boldMarkdownToHtml(change.example)} label="Copy example" copiedLabel="Example copied" /></div>}
       </section>)}
     </section>}
   </div>;
@@ -574,6 +593,12 @@ function CoverLetterView({ result, onDownload }: { result: ResumeResult; onDownl
 function EmptyResult({ text }: { text: string }) { return <div className="empty-state"><div className="empty-icon">AI</div><h3>Ready when you are</h3><p>{text}</p></div>; }
 function ResultList({ title, items = [] }: { title: string; items?: string[] }) { return <section className="feedback-block"><h3>{title}</h3><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></section>; }
 function KeywordList({ items = [] }: { items?: string[] }) { return items.length ? <section className="keyword-section"><h3>ATS keywords to verify</h3><div className="analysis-chip-list">{items.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div></section> : null; }
+function stripBoldMarkers(value: string) { return value.replace(/\*\*/g, ""); }
+function BoldText({ text }: { text: string }) { return <>{text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2, -2)}</strong> : <span key={index}>{part}</span>)}</>; }
+function boldMarkdownToHtml(value: string) {
+  const escape = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return value.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part) => part.startsWith("**") && part.endsWith("**") ? `<strong>${escape(part.slice(2, -2))}</strong>` : escape(part)).join("").replace(/\n/g, "<br>");
+}
 function formatMemoryDate(value: number) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
 function formatRoleLevel(value: string) { return value === "internship" ? "Internship" : value === "entry" ? "Entry level" : value === "mid" ? "Mid level" : "Senior level"; }
 function formatTone(value: CoverTone) { return value === "concise" ? "Concise" : value === "conversational" ? "Conversational" : "Professional"; }
