@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
+import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, formatResumeEmphasis, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -241,4 +241,11 @@ test("an applied needs-info template preserves prior credit without awarding pro
     recommendation[0].example,
   );
   assert.equal(result[0].status, "partial");
+});
+
+test("formats important resume phrases only when emphasis is enabled", () => {
+  const example = "Built Azure Functions APIs with structured JSON validation.";
+  assert.equal(formatResumeEmphasis(example, false, ["Azure Functions"]), example);
+  assert.equal(formatResumeEmphasis(example, true, ["Azure Functions", "JSON"]), "Built **Azure Functions** APIs with structured **JSON** validation.");
+  assert.equal(formatResumeEmphasis("Built **Azure Functions** APIs.", true, ["APIs"]), "Built **Azure Functions** APIs.");
 });

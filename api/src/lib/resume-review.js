@@ -173,6 +173,35 @@ export function applyPreviousRecommendationCredit(criteria, previousCriteria = [
   });
 }
 
+export function formatResumeEmphasis(value, enabled = false, phrases = [], maxPhrases = 4) {
+  const original = String(value || "").replace(/\*\*/g, "");
+  if (!enabled) return original;
+  const supplied = String(value || "");
+  const marked = supplied.match(/\*\*[^*\n]+\*\*/g) || [];
+  if (marked.length && marked.length <= maxPhrases && marked.every((item) => item.slice(2, -2).trim())) return supplied;
+
+  const candidates = Array.isArray(phrases)
+    ? [...new Set(phrases.map((item) => compact(item, 80)).filter((item) => item.length >= 2))].sort((a, b) => b.length - a.length)
+    : [];
+  const lower = original.toLowerCase();
+  const ranges = [];
+  for (const phrase of candidates) {
+    const start = lower.indexOf(phrase.toLowerCase());
+    if (start < 0 || ranges.some((range) => start < range.end && start + phrase.length > range.start)) continue;
+    ranges.push({ start, end: start + phrase.length });
+    if (ranges.length >= maxPhrases) break;
+  }
+  if (!ranges.length) return original;
+  ranges.sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  let formatted = "";
+  for (const range of ranges) {
+    formatted += `${original.slice(cursor, range.start)}**${original.slice(range.start, range.end)}**`;
+    cursor = range.end;
+  }
+  return formatted + original.slice(cursor);
+}
+
 export function scoreEvaluationCriteria(criteria, statusField = "status") {
   const breakdown = resumeScoringRubric.map((rubric) => {
     const items = criteria.filter((item) => item.category === rubric.category);

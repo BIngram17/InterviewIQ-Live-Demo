@@ -405,6 +405,11 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .studio-input-column,.studio-output-column { display:grid; gap:22px; min-width:0; }
 .resume-studio-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:22px; }
 .resume-review-column,.cover-letter-column { display:grid; gap:22px; min-width:0; }
+.review-format-option { display:flex; align-items:flex-start; gap:11px; padding:12px 14px; border:1px solid var(--border-soft); border-radius:15px; background:var(--field-bg); cursor:pointer; }
+.review-format-option input { flex:none; width:18px; height:18px; margin:2px 0 0; accent-color:var(--brand-purple); }
+.review-format-option span { display:grid; min-width:0; gap:3px; color:var(--text-soft); }
+.review-format-option strong { color:var(--text-main); font-size:.86rem; }
+.review-format-option small { color:var(--text-muted); font-size:.76rem; line-height:1.45; }
 .target-job-panel { margin-bottom:22px; }
 .target-job-panel.target-collapsed { padding-block:20px; }
 .target-ready-button { justify-self:end; width:auto; }
