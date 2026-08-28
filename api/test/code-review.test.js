@@ -43,3 +43,24 @@ test("non-guided review still requires suggested code", () => {
   };
   assert.equal(hasCompleteCodeReview(raw, false), false);
 });
+
+test("suggested solutions preserve vertical formatting for supported languages", () => {
+  const solutions = [
+    "function solution(input) {\n  return input.length;\n}",
+    "def solution(values):\n    return len(values)",
+    "static int solution(int[] values) {\n    return values.length;\n}",
+    "static int Solution(int[] values)\n{\n    return values.Length;\n}",
+    "fn solution(values: &[i32]) -> usize {\n    values.len()\n}",
+  ];
+  for (const suggestedCode of solutions) {
+    const raw = {
+      score: 8,
+      verdict: "Good foundation.",
+      strengths: ["Readable."],
+      improvements: ["Add edge-case coverage."],
+      complexity: "O(n).",
+      suggestedCode: `\`\`\`language\n${suggestedCode}\n\`\`\``,
+    };
+    assert.equal(normalizeCodeReview(raw).suggestedCode, suggestedCode);
+  }
+});

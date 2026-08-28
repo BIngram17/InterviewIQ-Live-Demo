@@ -15,6 +15,21 @@ function firstText(value, keys, maxLength) {
   return "";
 }
 
+function firstCode(value, keys, maxLength) {
+  for (const key of keys) {
+    if (typeof value?.[key] !== "string") continue;
+    const result = value[key]
+      .replace(/\r\n?/g, "\n")
+      .trim()
+      .replace(/^```[^\n]*\n?/, "")
+      .replace(/\n?```$/, "")
+      .trim()
+      .slice(0, maxLength);
+    if (result) return result;
+  }
+  return "";
+}
+
 function numericScore(value) {
   const candidate = value?.score ?? value?.rating;
   if (Number.isFinite(Number(candidate))) return Number(candidate);
@@ -28,7 +43,7 @@ export function hasCompleteCodeReview(value, guidedReview = false) {
     && Boolean(firstArray(value, ["strengths", "whatWorks"]))
     && Boolean(firstArray(value, ["improvements", "nextActions", "areasToImprove"]))
     && Boolean(firstText(value, ["complexity", "complexityAnalysis"], 500))
-    && (guidedReview || Boolean(firstText(value, ["suggestedCode", "improvedCode"], 12000)));
+    && (guidedReview || Boolean(firstCode(value, ["suggestedCode", "improvedCode"], 12000)));
 }
 
 export function normalizeCodeReview(value, { guidedReview = false, testSummary = "" } = {}) {
@@ -50,6 +65,6 @@ export function normalizeCodeReview(value, { guidedReview = false, testSummary =
     strengths,
     improvements,
     complexity: firstText(value, ["complexity", "complexityAnalysis"], 500),
-    suggestedCode: guidedReview ? "" : firstText(value, ["suggestedCode", "improvedCode"], 12000),
+    suggestedCode: guidedReview ? "" : firstCode(value, ["suggestedCode", "improvedCode"], 12000),
   };
 }

@@ -247,7 +247,7 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 .code-feedback-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 .code-feedback-heading h3 { margin:5px 0 0; color:var(--text-main); font-size:1rem; line-height:1.45; }
 .suggested-code { overflow:hidden; }
-.suggested-code pre { width:100%; min-width:0; max-width:100%; margin:0; padding:14px; overflow:auto; border-radius:14px; color:#e2e8f0; background:#070d1b; white-space:pre; }
+.suggested-code pre { width:100%; min-width:0; max-width:100%; margin:0; padding:14px; overflow-y:auto; overflow-x:hidden; border-radius:14px; color:#e2e8f0; background:#070d1b; white-space:pre-wrap; overflow-wrap:anywhere; tab-size:2; }
 .suggested-code code { font-family:"SFMono-Regular",Consolas,monospace; font-size:.8rem; line-height:1.6; }
 .code-runner-frame { position:absolute; width:1px; height:1px; border:0; opacity:0; pointer-events:none; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
