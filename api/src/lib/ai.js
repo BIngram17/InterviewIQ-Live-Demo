@@ -1,6 +1,7 @@
 const API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models";
 const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite";
+const CAPACITY_MODEL = process.env.GEMINI_CAPACITY_MODEL || "gemini-3.7-flash";
 const RETRY_BASE_MS = Math.max(1, Number(process.env.GEMINI_RETRY_BASE_MS) || 650);
 const ATTEMPT_TIMEOUT_MS = Math.max(100, Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS) || 17_000);
 const TOTAL_TIMEOUT_MS = Math.max(ATTEMPT_TIMEOUT_MS, Number(process.env.GEMINI_TOTAL_TIMEOUT_MS) || 50_000);
@@ -221,11 +222,9 @@ export async function completeJson({
   let sawInvalidContent = false;
   let rateLimitRetryAfter = 0;
   const rateLimitedModels = new Set();
-  const configuredAttempts = PRIMARY_MODEL === FALLBACK_MODEL
-    ? [PRIMARY_MODEL, PRIMARY_MODEL]
-    : preferFallback
-      ? [FALLBACK_MODEL, PRIMARY_MODEL, FALLBACK_MODEL]
-      : [PRIMARY_MODEL, FALLBACK_MODEL, PRIMARY_MODEL];
+  const configuredAttempts = preferFallback
+    ? [FALLBACK_MODEL, PRIMARY_MODEL, CAPACITY_MODEL]
+    : [PRIMARY_MODEL, FALLBACK_MODEL, CAPACITY_MODEL];
   const modelAttempts = configuredAttempts.slice(0, Math.max(1, Math.min(3, Number(maxAttempts) || 3)));
 
   for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {

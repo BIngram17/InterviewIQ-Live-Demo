@@ -92,7 +92,7 @@ test("completeJson retries valid JSON that fails response-shape validation", asy
   assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
 });
 
-test("completeJson retries a transient outage using the fallback before retrying primary", async () => {
+test("completeJson retries a transient outage across three stable models", async () => {
   const urls = [];
   globalThis.fetch = async (url) => {
     urls.push(url);
@@ -108,7 +108,7 @@ test("completeJson retries a transient outage using the fallback before retrying
   assert.equal(urls.length, 3);
   assert.match(urls[0], /gemini-3\.6-flash:generateContent$/);
   assert.match(urls[1], /gemini-3\.5-flash-lite:generateContent$/);
-  assert.match(urls[2], /gemini-3\.6-flash:generateContent$/);
+  assert.match(urls[2], /gemini-3\.7-flash:generateContent$/);
 });
 
 test("completeJson gives the fallback a fresh timeout after a stalled primary", async () => {
@@ -180,7 +180,7 @@ test("completeJson translates Gemini rate limits into a safe public error", asyn
     completeJson({ system: "Return JSON.", data: {} }),
     (error) => error instanceof ApiError && error.status === 429 && error.retryAfter === 12 && /12 seconds/.test(error.message),
   );
-  assert.equal(calls, 2, "each rate-limited model should be attempted only once");
+  assert.equal(calls, 3, "each rate-limited model should be attempted only once");
 });
 
 test("completeJson respects a smaller attempt budget", async () => {
