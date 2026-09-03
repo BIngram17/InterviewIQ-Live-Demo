@@ -74,7 +74,9 @@ app.http("resumeTools", {
       // truncate the JSON near the end of the changes array.
       maxTokens: action === "cover-letter" ? 1400 : 5600,
       preferFallback: action === "review",
-      maxAttempts: 2,
+      // A third stable model provides a separate capacity path when both normal
+      // models reject immediately with 429/503, without extending slow calls.
+      maxAttempts: action === "review" ? 3 : 2,
       attemptTimeoutMs: action === "review" ? 20_000 : undefined,
       // Azure Static Web Apps enforces a 45-second API ceiling. Keep enough
       // margin for parsing, normalization, and the response itself.

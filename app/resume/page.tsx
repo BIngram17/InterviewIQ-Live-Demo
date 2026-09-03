@@ -76,6 +76,7 @@ export default function ResumeStudio() {
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [resumeStatus, setResumeStatus] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
+  const [reviewRetrySeconds, setReviewRetrySeconds] = useState(0);
   const [coverRetrySeconds, setCoverRetrySeconds] = useState(0);
   const [savedApplications, setSavedApplications] = useState<SavedApplication[]>([]);
   const [activeApplicationId, setActiveApplicationId] = useState("");
@@ -111,6 +112,12 @@ export default function ResumeStudio() {
     if (!reviewFormattingLoadedRef.current) return;
     window.localStorage.setItem(reviewFormattingStorageKey, String(boldImportantPhrases));
   }, [boldImportantPhrases]);
+
+  useEffect(() => {
+    if (reviewRetrySeconds <= 0) return;
+    const timeout = window.setTimeout(() => setReviewRetrySeconds((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearTimeout(timeout);
+  }, [reviewRetrySeconds]);
 
   useEffect(() => {
     if (coverRetrySeconds <= 0) return;
@@ -364,7 +371,7 @@ export default function ResumeStudio() {
   const candidateProfileSections = Object.values(candidateProfile).filter((value) => value.trim()).length;
 
   const runTool = async (action: "review" | "cover-letter") => {
-    if (!toolsReady || (action === "cover-letter" && coverRetrySeconds > 0)) return;
+    if (!toolsReady || (action === "review" && reviewRetrySeconds > 0) || (action === "cover-letter" && coverRetrySeconds > 0)) return;
     const setBusy = action === "review" ? setIsReviewing : setIsGeneratingCover;
     const setStatus = action === "review" ? setResumeStatus : setCoverStatus;
     setBusy(true);
@@ -380,6 +387,10 @@ export default function ResumeStudio() {
       });
       const payload = await response.json();
       if (!response.ok) {
+        if (action === "review" && response.status === 429) {
+          const retryAfter = Number(response.headers.get("Retry-After"));
+          setReviewRetrySeconds(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);
+        }
         if (action === "cover-letter" && response.status === 429) {
           const retryAfter = Number(response.headers.get("Retry-After"));
           setCoverRetrySeconds(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);
@@ -387,6 +398,7 @@ export default function ResumeStudio() {
         throw new Error(payload?.error || "The resume coach could not complete this request.");
       }
       if (action === "review") {
+        setReviewRetrySeconds(0);
         setReviewResult(payload);
         setIsReviewStale(false);
         setStatus("Your review and targeted changes are ready.");
@@ -528,7 +540,7 @@ export default function ResumeStudio() {
               <label className="field"><span>Resume text</span><textarea className="resume-textarea" value={resume} maxLength={14000} onChange={(event) => { setResume(event.target.value); setResumeFileName(""); setIsReviewStale(Boolean(reviewResult)); setCoverResult(null); }} placeholder="Paste the complete text of your resume here." /></label>
               <p className="privacy-note">The original file is not stored. Extracted text autosaves only in this browser and is sent to AI when you run a tool.</p>
               {!toolsReady && <p className="requirement-hint">Add a target job and at least 120 characters of resume text to enable AI tools.</p>}
-              <button className="primary-button review-resume-button" type="button" disabled={!toolsReady || isReviewing || isExtracting} onClick={() => runTool("review")}>{isReviewing ? "Reviewing resume..." : reviewResult ? "Regenerate review + targeted changes" : "Review resume + targeted changes"}</button>
+              <button className="primary-button review-resume-button" type="button" disabled={!toolsReady || isReviewing || isExtracting || reviewRetrySeconds > 0} onClick={() => runTool("review")}>{isReviewing ? "Reviewing resume..." : reviewRetrySeconds > 0 ? `Try again in ${reviewRetrySeconds}s` : reviewResult ? "Regenerate review + targeted changes" : "Review resume + targeted changes"}</button>
               <label className="review-format-option"><input type="checkbox" checked={boldImportantPhrases} onChange={(event) => setBoldImportantPhrases(event.target.checked)} /><span><strong>Bold important keywords and phrases</strong><small>Formats emphasized terms in recommended examples and preserves bold styling when supported by the destination.</small></span></label>
               {resumeStatus && <p className="studio-status" role="status">{resumeStatus}</p>}
             </article>
