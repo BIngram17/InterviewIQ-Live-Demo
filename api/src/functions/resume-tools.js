@@ -142,7 +142,10 @@ app.http("resumeTools", {
       // A third stable model provides a separate capacity path when both normal
       // models reject immediately with 429/503, without extending slow calls.
       maxAttempts: action === "review" ? 3 : 2,
-      attemptTimeoutMs: action === "review" ? 20_000 : undefined,
+      // A complete scoring response typically needs more than 20 seconds.
+      // Preserve one uninterrupted generation window; immediate provider
+      // failures can still advance to the next configured model.
+      attemptTimeoutMs: action === "review" ? 40_000 : undefined,
       // Azure Static Web Apps enforces a 45-second API ceiling. Keep enough
       // margin for parsing, normalization, and the response itself.
       totalTimeoutMs: action === "review" ? 42_000 : undefined,
