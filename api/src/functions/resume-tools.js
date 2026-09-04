@@ -102,19 +102,21 @@ app.http("resumeTools", {
       const atsKeywords = arrayOfText(body.atsKeywords, 14, 80);
       const recommendationResult = await completeJson({
         system:
-          "You are InterviewIQ's expert resume editor. Generate exactly six prioritized, material, non-duplicate resume changes tied to the supplied scoring criteria. " +
+          "You are InterviewIQ's expert resume editor. Generate exactly four highest-impact, material, non-duplicate resume changes tied to the supplied scoring criteria. " +
           "Each change must target a specific unmatched or under-evidenced job requirement and use an exact supplied criterion id. " +
           candidateProfileInstruction + " " + materialChangeInstruction + " " + emphasisInstruction + " " +
           "For each change return criterionId, section, operation, placement, sourceEvidence, currentIssue, suggestion, example, relatedRequirement, kind, priority, and scoreImpact. " +
           "Use only add, replace, or move for operation; rewrite or needs-info for kind; and high, medium, or low for priority. " +
           "Never abbreviate or end text with an ellipsis. Return JSON with shape {\"changes\":[{\"criterionId\":string,\"section\":string,\"operation\":\"add\"|\"replace\"|\"move\",\"placement\":string,\"sourceEvidence\":string,\"currentIssue\":string,\"suggestion\":string,\"example\":string,\"relatedRequirement\":string,\"kind\":\"rewrite\"|\"needs-info\",\"priority\":\"high\"|\"medium\"|\"low\",\"scoreImpact\":number}]}",
         data: { currentDate, resume, candidateProfile, jobTitle, company, level, jobDescription, evaluationCriteria, atsKeywords },
-        maxTokens: 3800,
+        maxTokens: 2600,
         preferFallback: true,
         maxAttempts: 3,
-        attemptTimeoutMs: 20_000,
+        // Long outputs need one uninterrupted generation window. Immediate
+        // provider errors can still move to another model within this budget.
+        attemptTimeoutMs: 40_000,
         totalTimeoutMs: 42_000,
-        validate: (value) => normalizeReturnedChanges(value?.changes, criterionIds, atsKeywords).length >= 4,
+        validate: (value) => normalizeReturnedChanges(value?.changes, criterionIds, atsKeywords).length >= 3,
       });
       return {
         action,
