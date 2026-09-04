@@ -401,6 +401,33 @@ export default function ResumeStudio() {
         setReviewRetrySeconds(0);
         setReviewResult(payload);
         setIsReviewStale(false);
+        setStatus("Your score is ready. Generating targeted changes...");
+        const changesResponse = await fetch("/api/resume-tools", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "review-changes",
+            resume,
+            candidateProfile,
+            jobTitle,
+            company,
+            level,
+            jobDescription,
+            emphasizeKeywords: boldImportantPhrases,
+            reviewCriteria: payload.evaluationCriteria,
+            atsKeywords: payload.atsKeywords,
+          }),
+        });
+        const changesPayload = await changesResponse.json();
+        if (!changesResponse.ok) {
+          if (changesResponse.status === 429) {
+            const retryAfter = Number(changesResponse.headers.get("Retry-After"));
+            setReviewRetrySeconds(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);
+          }
+          setStatus(`Your score and analysis are ready, but targeted changes could not be generated. ${changesPayload?.error || "Try regenerating the review."}`);
+          return;
+        }
+        setReviewResult({ ...payload, changes: changesPayload.changes });
         setStatus("Your review and targeted changes are ready.");
       } else {
         setCoverResult(payload);

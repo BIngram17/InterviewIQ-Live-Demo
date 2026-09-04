@@ -52,7 +52,7 @@ export function clientAddress(request) {
   return text(request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown", 80);
 }
 
-export function allowRequest(request, scope) {
+export function allowRequest(request, scope, maxRequests = 8) {
   const now = Date.now();
   const windowMs = 10 * 60 * 1000;
   const key = `${scope}:${clientAddress(request)}`;
@@ -70,8 +70,8 @@ export function allowRequest(request, scope) {
   }
 
   return {
-    allowed: bucket.count <= 8,
-    remaining: Math.max(0, 8 - bucket.count),
+    allowed: bucket.count <= maxRequests,
+    remaining: Math.max(0, maxRequests - bucket.count),
     retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
   };
 }
@@ -298,10 +298,10 @@ export async function completeJson({
   throw new ApiError(502, "The AI response was incomplete after retrying. Please try again.");
 }
 
-export function withApi(handler, scope) {
+export function withApi(handler, scope, maxRequests = 8) {
   return async (request, context) => {
     if (request.method !== "POST") return json(405, { error: "Method not allowed." }, { Allow: "POST" });
-    const rate = allowRequest(request, scope);
+    const rate = allowRequest(request, scope, maxRequests);
     if (!rate.allowed) {
       return json(429, { error: "Too many requests. Please wait before trying again." }, {
         "Retry-After": String(rate.retryAfter),
