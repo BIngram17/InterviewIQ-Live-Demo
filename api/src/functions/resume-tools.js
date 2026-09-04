@@ -110,7 +110,7 @@ app.http("resumeTools", {
           "Never abbreviate or end text with an ellipsis. Return JSON with shape {\"changes\":[{\"criterionId\":string,\"section\":string,\"operation\":\"add\"|\"replace\"|\"move\",\"placement\":string,\"sourceEvidence\":string,\"currentIssue\":string,\"suggestion\":string,\"example\":string,\"relatedRequirement\":string,\"kind\":\"rewrite\"|\"needs-info\",\"priority\":\"high\"|\"medium\"|\"low\",\"scoreImpact\":number}]}",
         data: { currentDate, resume, candidateProfile, jobTitle, company, level, jobDescription, evaluationCriteria, atsKeywords },
         maxTokens: 2600,
-        preferFallback: true,
+        preferFallback: false,
         maxAttempts: 3,
         // Long outputs need one uninterrupted generation window. Immediate
         // provider errors can still move to another model within this budget.
@@ -138,7 +138,7 @@ app.http("resumeTools", {
       // Scoring and recommendation generation use separate requests so neither
       // structured response approaches Azure's API time ceiling.
       maxTokens: action === "cover-letter" ? 1400 : 2800,
-      preferFallback: action === "review",
+      preferFallback: false,
       // A third stable model provides a separate capacity path when both normal
       // models reject immediately with 429/503, without extending slow calls.
       maxAttempts: action === "review" ? 3 : 2,
