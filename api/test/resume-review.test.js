@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, formatResumeEmphasis, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
+import { applyPreviousRecommendationCredit, buildRubricFallbackChanges, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, formatResumeEmphasis, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, resumeScoringRubric, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../src/lib/resume-review.js";
 
 const august2026 = new Date("2026-08-14T12:00:00Z");
 
@@ -29,6 +29,40 @@ test("unknown change classifications default to needs-info", () => {
 test("change operations are restricted to add, replace, or move", () => {
   assert.equal(safeChangeOperation("replace"), "replace");
   assert.equal(safeChangeOperation("delete"), "add");
+});
+
+test("builds evidence-safe guided recommendations from incomplete rubric criteria", () => {
+  const criteria = [
+    {
+      id: "required-kubernetes",
+      category: "Required qualifications",
+      requirement: "Production Kubernetes experience",
+      importance: "required",
+      status: "missing",
+      projectedStatus: "partial",
+      evidence: "",
+      explanation: "The resume does not provide production Kubernetes evidence.",
+    },
+    {
+      id: "impact-delivery",
+      category: "Quantified impact and evidence",
+      requirement: "Measured delivery impact",
+      importance: "quality",
+      status: "partial",
+      projectedStatus: "met",
+      evidence: "Automated builds and deployments",
+      explanation: "The delivery result is not quantified.",
+    },
+  ];
+  const changes = buildRubricFallbackChanges(criteria, 4, "Automated builds and deployments with GitHub Actions.");
+  assert.equal(changes.length, 2);
+  assert.equal(changes[0].criterionId, "required-kubernetes");
+  assert.equal(changes[0].operation, "add");
+  assert.equal(changes[0].kind, "needs-info");
+  assert.equal(changes[0].sourceEvidence, "");
+  assert.match(changes[0].example, /\[[^\]]+\]/);
+  assert.doesNotMatch(changes[0].example, /\.\.\.|…/);
+  assert.equal(changes[1].sourceEvidence, "Automated builds and deployments");
 });
 
 test("rejects replacement and addition recommendations that do not change the resume", () => {

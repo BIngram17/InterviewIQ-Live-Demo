@@ -225,6 +225,54 @@ export function safeChangeOperation(value) {
   return ["add", "replace", "move"].includes(value) ? value : "add";
 }
 
+const fallbackSectionByCategory = {
+  "Required qualifications": "Professional Experience",
+  "Relevant experience and seniority": "Professional Experience",
+  "Skills and ATS terminology": "Technical Skills",
+  "Quantified impact and evidence": "Professional Experience",
+  "Clarity and ATS readability": "Resume Structure",
+};
+
+const fallbackPlacementByCategory = {
+  "Required qualifications": "Add beneath the most relevant verified experience or project entry.",
+  "Relevant experience and seniority": "Add beneath the role or project that best demonstrates the required scope and responsibility.",
+  "Skills and ATS terminology": "Add within the appropriate existing Technical Skills category, or create an Additional Skills line if needed.",
+  "Quantified impact and evidence": "Add to the most relevant existing achievement bullet after confirming the result and measurement.",
+  "Clarity and ATS readability": "Apply within the section identified by this rubric criterion while preserving all existing skills and facts.",
+};
+
+export function buildRubricFallbackChanges(criteria, limit = 4, resumeEvidence = "") {
+  const statusRank = { missing: 0, partial: 1, met: 2 };
+  const importanceRank = { required: 0, preferred: 1, quality: 2 };
+  const sorted = (Array.isArray(criteria) ? criteria : [])
+    .filter((item) => compact(item?.id, 60) && compact(item?.requirement, 260))
+    .sort((left, right) => (
+      (statusRank[safeStatus(left?.status)] - statusRank[safeStatus(right?.status)])
+      || (importanceRank[compact(left?.importance, 20).toLowerCase()] ?? 2) - (importanceRank[compact(right?.importance, 20).toLowerCase()] ?? 2)
+    ));
+
+  return sorted.slice(0, Math.max(0, limit)).map((criterion) => {
+    const status = safeStatus(criterion.status);
+    const requirement = compact(criterion.requirement, 260);
+    const category = rubricCategory(criterion.category) || "Relevant experience and seniority";
+    const isRequiredGap = criterion.importance === "required" && status !== "met";
+    return {
+      criterionId: compact(criterion.id, 60),
+      section: fallbackSectionByCategory[category],
+      operation: "add",
+      placement: fallbackPlacementByCategory[category],
+      sourceEvidence: resumeContainsEvidence(resumeEvidence, criterion.evidence) ? compact(criterion.evidence, 500) : "",
+      currentIssue: compact(criterion.explanation, 320) || `The resume does not clearly demonstrate ${requirement}.`,
+      suggestion: `Add a concise statement only if you can verify experience demonstrating ${requirement}.`,
+      example: `[Add a truthful example demonstrating ${requirement}, including your specific contribution and a verified result.]`,
+      relatedRequirement: requirement,
+      kind: "needs-info",
+      priority: isRequiredGap || status === "missing" ? "high" : status === "partial" ? "medium" : "low",
+      scoreImpact: isRequiredGap ? 8 : status === "missing" ? 6 : status === "partial" ? 4 : 2,
+    };
+  });
+}
+
 export function isNoOpChange(change, resume) {
   const normalize = (value) => String(value || "")
     .toLowerCase()
