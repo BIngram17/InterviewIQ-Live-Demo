@@ -428,7 +428,7 @@ export default function ResumeStudio() {
           return;
         }
         setReviewResult({ ...payload, changes: changesPayload.changes });
-        setStatus("Your review and targeted changes are ready.");
+        setStatus(changesPayload.warning || "Your review and targeted changes are ready.");
       } else {
         setCoverResult(payload);
         setCoverVersions((current) => [{ id: crypto.randomUUID(), createdAt: Date.now(), tone: coverTone, result: payload }, ...current].slice(0, 10));

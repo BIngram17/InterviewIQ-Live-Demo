@@ -1,7 +1,7 @@
 import { app } from "@azure/functions";
 import { createHash } from "node:crypto";
 import { ApiError, arrayOfText, completeJson, multilineText, readBody, text, withApi } from "../lib/ai.js";
-import { applyPreviousRecommendationCredit, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, formatResumeEmphasis, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
+import { applyPreviousRecommendationCredit, buildRubricFallbackChanges, countWords, coverLetterInRange, coverLetterNotes, currentDateIso, endsWithOmission, formatResumeEmphasis, hasCompleteEvaluationCriteria, isNoOpChange, mislabelsCompletedPastDate, normalizeEvaluationCriteria, requestsSkillDeletion, resumeContainsEvidence, safeChangeKind, safeChangeOperation, scoreEvaluationCriteria } from "../lib/resume-review.js";
 
 const actions = new Set(["review", "review-changes", "cover-letter"]);
 
@@ -56,11 +56,14 @@ app.http("resumeTools", {
       ? "Return evaluationCriteria with exactly two concise criteria for each of the five rubric categories. Each criterion must contain id, category, requirement, importance (required, preferred, or quality), status (met, partial, or missing), projectedStatus, evidence, and explanation. Every change must use a criterionId copied exactly from one returned evaluation criterion. Evidence must be a short exact quote from the resume or Candidate Profile; use an empty string when evidence is missing. projectedStatus represents the result after every supplied safe rewrite and every truthfully completed needs-info item. If lockedCriteria is non-empty, preserve its exact IDs, categories, requirements, and importance values and reassess only status, projectedStatus, evidence, and explanation. Do not add, remove, merge, or reinterpret locked criteria. The server calculates the final score from these statuses, so do not manipulate criteria to force a higher or lower result."
       : "";
     const completeRecommendation = (change) => {
-      const requiredText = ["criterionId", "section", "placement", "sourceEvidence", "currentIssue", "suggestion", "example", "relatedRequirement"];
+      const requiredText = ["criterionId", "section", "placement", "currentIssue", "suggestion", "example", "relatedRequirement"];
       const hasCompleteText = requiredText.every((field) => typeof change?.[field] === "string" && change[field].trim() && !endsWithOmission(change[field]));
+      const operation = safeChangeOperation(change?.operation);
+      const hasRequiredEvidence = operation === "add"
+        || (typeof change?.sourceEvidence === "string" && change.sourceEvidence.trim() && !endsWithOmission(change.sourceEvidence));
       const preservesSkills = !requestsSkillDeletion(change) && !(/skills?/i.test(change?.section || "") && change?.operation === "replace");
       const hasSafeNeedsInfoTemplate = change?.kind !== "needs-info" || /\[[^\]]+\]/.test(change?.example || "");
-      return hasCompleteText && preservesSkills && hasSafeNeedsInfoTemplate && !isNoOpChange(change, resume);
+      return hasCompleteText && hasRequiredEvidence && preservesSkills && hasSafeNeedsInfoTemplate && !isNoOpChange(change, resume);
     };
 
     const normalizeReturnedChanges = (rawChanges, criterionIds, atsKeywords) => (Array.isArray(rawChanges) ? rawChanges : [])
@@ -100,13 +103,18 @@ app.http("resumeTools", {
       );
       const criterionIds = new Set(evaluationCriteria.map((item) => item.id));
       const atsKeywords = arrayOfText(body.atsKeywords, 14, 80);
-      const recommendationResult = await completeJson({
+      const verifiedEvidence = `${resume}\n${Object.values(candidateProfile).join("\n")}`;
+      const fallbackChanges = buildRubricFallbackChanges(evaluationCriteria, 4, verifiedEvidence);
+      let recommendationResult;
+      try {
+        recommendationResult = await completeJson({
         system:
           "You are InterviewIQ's expert resume editor. Generate exactly four highest-impact, material, non-duplicate resume changes tied to the supplied scoring criteria. " +
           "Each change must target a specific unmatched or under-evidenced job requirement and use an exact supplied criterion id. " +
           candidateProfileInstruction + " " + materialChangeInstruction + " " + emphasisInstruction + " " +
           "For each change return criterionId, section, operation, placement, sourceEvidence, currentIssue, suggestion, example, relatedRequirement, kind, priority, and scoreImpact. " +
           "Use only add, replace, or move for operation; rewrite or needs-info for kind; and high, medium, or low for priority. " +
+          "For an add operation, sourceEvidence may be an empty string when the rubric confirms that evidence is missing; use a needs-info template with square-bracket placeholders in that case. " +
           "Never abbreviate or end text with an ellipsis. Return JSON with shape {\"changes\":[{\"criterionId\":string,\"section\":string,\"operation\":\"add\"|\"replace\"|\"move\",\"placement\":string,\"sourceEvidence\":string,\"currentIssue\":string,\"suggestion\":string,\"example\":string,\"relatedRequirement\":string,\"kind\":\"rewrite\"|\"needs-info\",\"priority\":\"high\"|\"medium\"|\"low\",\"scoreImpact\":number}]}",
         data: { currentDate, resume, candidateProfile, jobTitle, company, level, jobDescription, evaluationCriteria, atsKeywords },
         maxTokens: 2600,
@@ -116,11 +124,28 @@ app.http("resumeTools", {
         // provider errors can still move to another model within this budget.
         attemptTimeoutMs: 40_000,
         totalTimeoutMs: 42_000,
-        validate: (value) => normalizeReturnedChanges(value?.changes, criterionIds, atsKeywords).length >= 3,
-      });
+        validate: (value) => normalizeReturnedChanges(value?.changes, criterionIds, atsKeywords).length >= 1,
+        });
+      } catch {
+        return {
+          action,
+          changes: fallbackChanges,
+          isFallback: true,
+          warning: "The live editor was unavailable, so these safe guided recommendations were created from your completed AI scoring rubric. Replace every bracketed placeholder only with facts you can verify.",
+        };
+      }
+      const generatedChanges = normalizeReturnedChanges(recommendationResult?.changes, criterionIds, atsKeywords);
+      const generatedCriterionIds = new Set(generatedChanges.map((change) => change.criterionId));
+      const supplementalChanges = fallbackChanges.filter((change) => !generatedCriterionIds.has(change.criterionId));
+      const changes = [...generatedChanges, ...supplementalChanges].slice(0, 4);
+      const usedFallback = changes.length > generatedChanges.length;
       return {
         action,
-        changes: normalizeReturnedChanges(recommendationResult?.changes, criterionIds, atsKeywords),
+        changes,
+        isFallback: usedFallback,
+        warning: usedFallback
+          ? "Some recommendations were safely completed from your AI scoring rubric. Replace every bracketed placeholder only with facts you can verify."
+          : "",
       };
     }
 
