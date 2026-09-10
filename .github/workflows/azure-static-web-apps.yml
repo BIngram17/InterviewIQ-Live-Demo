@@ -29,6 +29,7 @@ jobs:
       - name: Install and test
         run: |
           npm ci
+          npm --prefix api ci
           npx playwright install --with-deps chromium
           npm run lint
           npm --prefix api test

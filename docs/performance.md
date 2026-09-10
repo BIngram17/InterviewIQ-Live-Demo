@@ -35,7 +35,7 @@ baseline was captured, so no latency reduction percentage is claimed.
 
 ## Verification scope
 
-Verified in this change: 57 API/unit tests and 10 browser end-to-end tests passed.
+Verified in this change: 58 API/unit tests and 10 browser end-to-end tests passed.
 ESLint reported zero warnings/errors, and the Next.js static production build passed.
 
 The API suite covers model retry/fallback behavior, incomplete responses, response
@@ -45,6 +45,10 @@ Browser tests cover interview context, refusal to substitute sample answers,
 debugging progression and reset, saved history, Resume Studio, and mobile layout.
 Browser workflow tests mock AI responses; the JavaScript test runner executes
 the fixture code in the restricted browser frame.
+
+Dependency maintenance updated Next.js to 16.3.4, sharp to 0.35.4, and
+the DOCX parser's xmldom dependency to 0.8.15. Both npm audits reported zero known
+vulnerabilities after updating. A DOCX round-trip test verifies text extraction.
 
 ## Defensible resume statements
 
