@@ -19,7 +19,8 @@ function isPrivateAddress(address) {
   }
   if (version === 6) {
     const normalized = address.toLowerCase();
-    if (normalized.startsWith("::ffff:")) return isPrivateAddress(normalized.slice(7));
+    // Mapped IPv4 may use hex notation; reject rather than misclassify it.
+    if (normalized.startsWith("::ffff:")) return true;
     return normalized === "::1" || normalized === "::" ||
       normalized.startsWith("fc") || normalized.startsWith("fd") ||
       /^fe[89ab]/.test(normalized) || normalized.startsWith("ff") ||
@@ -94,7 +95,7 @@ function htmlToText(html) {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#(\d+);/g, (_, code) => Number(code) <= 0x10ffff ? String.fromCodePoint(Number(code)) : "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 30_000);
@@ -116,11 +117,11 @@ async function fetchPublicJobPage(initialUrl) {
         },
       });
     } catch (error) {
+      clearTimeout(timeout);
       if (error?.name === "AbortError") throw new ApiError(504, "The job page took too long to respond.");
       throw new ApiError(422, "The job page could not be downloaded. Paste its description manually instead.");
-    } finally {
-      clearTimeout(timeout);
     }
+    try {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || redirect === 3) throw new ApiError(422, "The job page redirected too many times.");
@@ -133,6 +134,7 @@ async function fetchPublicJobPage(initialUrl) {
       throw new ApiError(415, "The URL must point to a public HTML job posting.");
     }
     return { pageText: htmlToText(await readLimitedText(response)), finalUrl: url.toString() };
+    } finally { clearTimeout(timeout); }
   }
   throw new ApiError(422, "The job page could not be imported.");
 }

@@ -219,3 +219,17 @@ test("completeJson rejects incomplete Gemini responses", async () => {
     (error) => error instanceof ApiError && error.status === 502,
   );
 });
+test("a stalled response body times out and falls back after headers arrive", async () => {
+  let calls = 0;
+  globalThis.fetch = async (_url, options) => {
+    calls++;
+    if (calls === 1) return {
+      ok: true, status: 200,
+      json: () => new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Body stalled", "AbortError")), { once: true })),
+    };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"score":8}' }] } }] }));
+  };
+  const result = await completeJson({ system: "Score", data: {}, maxAttempts: 2 });
+  assert.equal(result.score, 8);
+  assert.equal(calls, 2);
+});

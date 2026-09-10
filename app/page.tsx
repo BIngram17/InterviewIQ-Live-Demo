@@ -65,6 +65,8 @@ type SavedInterviewSession = {
   level: string;
   interviewType: string;
   jobDescription: string;
+  resume?: string;
+  includeCommon?: boolean;
   questions: InterviewQuestion[];
   analysis: RoleAnalysis;
   createdAt: string;
@@ -75,283 +77,6 @@ type ActiveSection = "practice" | "questions" | "feedback";
 type CodeLanguage = "javascript" | "python" | "java";
 const answerHistoryStorageKey = "interviewiq-answer-history-v1";
 const interviewSessionsStorageKey = "interviewiq-saved-sessions-v1";
-
-const roleProfiles = {
-  software: {
-    label: "software engineering",
-    triggers: ["software", "developer", "engineer", "frontend", "backend", "full stack", "react", "python", "java", "api"],
-    technical: ["System design", "Data structures", "API design", "Testing"],
-    topics: ["Architecture tradeoffs", "Code quality", "Reliability", "Delivery"],
-    roleQuestion: "Walk me through how you would design and ship a reliable feature from API contract to production monitoring.",
-  },
-  data: {
-    label: "data and analytics",
-    triggers: ["data", "analyst", "analytics", "sql", "machine learning", "business intelligence", "scientist"],
-    technical: ["SQL", "Data modeling", "Experiment design", "Data quality"],
-    topics: ["Metric definition", "Causal reasoning", "Data validation", "Insight communication"],
-    roleQuestion: "How would you turn an ambiguous business question into a trustworthy analysis and recommendation?",
-  },
-  security: {
-    label: "cybersecurity",
-    triggers: ["security", "cyber", "soc", "siem", "incident", "vulnerability", "threat"],
-    technical: ["Threat modeling", "Incident response", "Detection engineering", "Risk assessment"],
-    topics: ["Triage", "Containment", "Least privilege", "Security communication"],
-    roleQuestion: "How would you investigate, contain, and communicate a high-confidence security alert?",
-  },
-  product: {
-    label: "product management",
-    triggers: ["product", "roadmap", "customer discovery", "prioritize", "user research", "b2b", "saas"],
-    technical: ["Product analytics", "Experiment design", "Roadmapping", "SQL"],
-    topics: ["Prioritization", "Customer discovery", "Product launches", "Outcomes"],
-    roleQuestion: "How would you prioritize a roadmap when customer needs, engineering constraints, and business goals conflict?",
-  },
-  project: {
-    label: "program and project delivery",
-    triggers: ["project", "program", "scrum", "agile", "delivery", "pmo", "stakeholder"],
-    technical: ["Program planning", "Risk management", "Dependency mapping", "Agile delivery"],
-    topics: ["Escalation", "Scope control", "Cross-team alignment", "Execution"],
-    roleQuestion: "How would you recover a cross-functional program that is behind schedule and has unclear ownership?",
-  },
-  design: {
-    label: "product design",
-    triggers: ["designer", "ux", "ui", "figma", "research", "prototype", "design system"],
-    technical: ["User research", "Interaction design", "Prototyping", "Design systems"],
-    topics: ["Design rationale", "Accessibility", "User testing", "Product collaboration"],
-    roleQuestion: "Walk me through how you would move from an ambiguous user problem to a validated design decision.",
-  },
-  general: {
-    label: "cross-functional business",
-    triggers: [],
-    technical: ["Domain expertise", "Data-informed decisions", "Process improvement", "Execution"],
-    topics: ["Prioritization", "Communication", "Problem solving", "Results"],
-    roleQuestion: "How would you approach an ambiguous, high-impact problem in this role?",
-  },
-} as const;
-
-const codingChallenges: Record<string, CodingChallenge[]> = {
-  software: [
-    {
-      title: "Merge overlapping maintenance windows",
-      prompt: "Implement solution(windows). Merge overlapping [start, end] time windows and return them ordered by start time.",
-      examples: "[[1, 3], [2, 6], [8, 10]] → [[1, 6], [8, 10]]",
-      starter: `function solution(windows) {\n  // Merge overlapping time windows.\n  return [];\n}`,
-      tests: [
-        { input: [[1, 3], [2, 6], [8, 10]], expected: [[1, 6], [8, 10]] },
-        { input: [[1, 4], [4, 5]], expected: [[1, 5]] },
-        { input: [], expected: [] },
-      ],
-    },
-    {
-      title: "Find the longest successful deployment streak",
-      prompt: "Implement solution(deployments). Return the longest number of consecutive successful deployments.",
-      examples: "[true, true, false, true, true, true] → 3",
-      starter: `function solution(deployments) {\n  // Return the longest consecutive run of true values.\n  return 0;\n}`,
-      tests: [
-        { input: [true, true, false, true, true, true], expected: 3 },
-        { input: [false, false], expected: 0 },
-        { input: [true, true, true, true], expected: 4 },
-      ],
-    },
-    {
-      title: "Identify duplicate request IDs",
-      prompt: "Implement solution(requestIds). Return duplicate request IDs once each, in the order their duplicate is first detected.",
-      examples: '["a", "b", "a", "c", "b"] → ["a", "b"]',
-      starter: `function solution(requestIds) {\n  // Return each duplicated request ID once.\n  return [];\n}`,
-      tests: [
-        { input: ["a", "b", "a", "c", "b"], expected: ["a", "b"] },
-        { input: ["x", "x", "x"], expected: ["x"] },
-        { input: [], expected: [] },
-      ],
-    },
-  ],
-  data: [{
-    title: "Summarize valid revenue records",
-    prompt: "Implement solution(rows). Return the sum of positive numeric revenue values, rounded to two decimals.",
-    examples: '[{ revenue: 10 }, { revenue: -2 }, { revenue: 3.456 }] → 13.46',
-    starter: `function solution(rows) {\n  // Ignore missing, non-numeric, and negative revenue.\n  return 0;\n}`,
-    tests: [
-      { input: [{ revenue: 10 }, { revenue: -2 }, { revenue: 3.456 }], expected: 13.46 },
-      { input: [{ revenue: "bad" }, {}, { revenue: 5 }], expected: 5 },
-      { input: [], expected: 0 },
-    ],
-  }],
-  security: [{
-    title: "Identify suspicious login sources",
-    prompt: "Implement solution(events). Return sorted IPs with at least three failed login events.",
-    examples: '[{ ip: "10.0.0.1", ok: false }, …] → ["10.0.0.1"]',
-    starter: `function solution(events) {\n  // Find IPs with 3+ failed attempts.\n  return [];\n}`,
-    tests: [
-      { input: [{ ip: "a", ok: false }, { ip: "a", ok: false }, { ip: "b", ok: false }, { ip: "a", ok: false }], expected: ["a"] },
-      { input: [{ ip: "b", ok: false }, { ip: "a", ok: false }, { ip: "b", ok: false }, { ip: "b", ok: false }], expected: ["b"] },
-      { input: [], expected: [] },
-    ],
-  }],
-};
-
-const instructionPattern =
-  /(ignore|override|disregard).{0,35}(instruction|prompt|system|developer)|reveal.{0,25}(prompt|secret|instruction)|jailbreak|<\s*script|javascript\s*:/i;
-
-function cleanText(value: string, limit: number) {
-  return value
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u206F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, limit);
-}
-
-function getRoleProfile(title: string, description: string) {
-  const haystack = `${title} ${description}`.toLowerCase();
-  const entries = Object.entries(roleProfiles).filter(([key]) => key !== "general");
-  return entries
-    .map(([key, profile]) => ({
-      key,
-      profile,
-      score: profile.triggers.reduce((total, trigger) => total + (haystack.includes(trigger) ? 1 : 0), 0),
-    }))
-    .sort((a, b) => b.score - a.score)[0]?.score
-    ? entries
-        .map(([key, profile]) => ({
-          key,
-          profile,
-          score: profile.triggers.reduce((total, trigger) => total + (haystack.includes(trigger) ? 1 : 0), 0),
-        }))
-        .sort((a, b) => b.score - a.score)[0]
-    : { key: "general", profile: roleProfiles.general, score: 0 };
-}
-
-function pickVariant<T>(items: readonly T[], variant: number, offset = 0) {
-  return items[(variant + offset) % items.length];
-}
-
-function buildInterview(
-  rawTitle: string,
-  rawDescription: string,
-  level: string,
-  interviewType: string,
-  variant = 0,
-) {
-  const title = cleanText(rawTitle, 100) || "this role";
-  const description = cleanText(rawDescription, 4000);
-  const { key, profile } = getRoleProfile(title, description);
-  const levelLabel =
-    level === "internship"
-      ? "internship"
-      : level === "entry"
-        ? "entry-level"
-        : level === "mid"
-          ? "mid-level"
-          : "senior";
-  const leadershipQuestions =
-    level === "senior"
-      ? [
-          `As a ${title}, how would you set direction, influence stakeholders, and raise the performance of the wider team?`,
-          `What would your first 90 days look like as a ${title}, and how would you decide where to intervene personally versus delegate?`,
-          `Tell me how you would challenge an executive decision that creates risk for ${profile.topics[0].toLowerCase()}.`,
-        ]
-      : level === "mid"
-        ? [
-            `As a ${title}, how would you independently drive a project while keeping partners aligned?`,
-            `How would you recognize that a project needs escalation, and what context would you bring to leadership?`,
-            `How do you balance independent judgment with seeking feedback in a ${title} role?`,
-          ]
-        : level === "entry"
-          ? [
-              `As a new ${title}, how would you take ownership of a clearly scoped project while knowing when to ask for guidance?`,
-              `Describe how you would build confidence in a task you have not completed before and communicate your progress.`,
-              `How would you use feedback during your first few months to improve the quality and independence of your work?`,
-            ]
-          : [
-            `As a ${title}, how would you seek context, learn quickly, and deliver a well-scoped first contribution?`,
-            `As an intern, how would you approach an unfamiliar task using documentation, experimentation, and questions for your mentor?`,
-            `What would you do to make an internship project useful to the team while developing your own skills?`,
-            ];
-  const roleQuestions = [
-    profile.roleQuestion.replace("this role", title),
-    `You inherit a ${profile.topics[0].toLowerCase()} initiative that is underperforming. How would you diagnose the cause and choose the next action as a ${title}?`,
-    `What signals would tell you that your approach to ${profile.topics[2].toLowerCase()} is working, and how would you respond if the signals disagree?`,
-  ];
-  const behavioralQuestions = [
-    `Tell me about a time you demonstrated ${profile.topics[0].toLowerCase()} in work relevant to a ${title}.`,
-    `Describe a time your original approach to ${profile.topics[1].toLowerCase()} was wrong. What did you learn and change?`,
-    `Give me an example of when you improved ${profile.topics[2].toLowerCase()} without having formal authority.`,
-  ];
-  const problemQuestions = [
-    `Describe how you would handle an ambiguous ${profile.topics[1].toLowerCase()} problem with incomplete information.`,
-    `A critical assumption behind ${profile.topics[0].toLowerCase()} is challenged one week before launch. How would you respond?`,
-    `How would you choose between speed and confidence when making a decision about ${profile.topics[2].toLowerCase()}?`,
-  ];
-  const collaborationQuestions = [
-    `Tell me about a difficult partnership you improved while delivering ${profile.topics[2].toLowerCase()}.`,
-    `Describe a disagreement with a cross-functional partner about ${profile.topics[0].toLowerCase()}. How did you reach a decision?`,
-    `Tell me about a time stakeholder expectations conflicted during ${profile.topics[1].toLowerCase()}. What did you do?`,
-  ];
-  const technicalQuestions = [
-    `Explain a difficult tradeoff involving ${profile.technical[0]} and ${profile.technical[1]}. What would change your decision?`,
-    `How would you evaluate the quality and reliability of work involving ${profile.technical[2]}?`,
-    `Walk me through a failure mode involving ${profile.technical[3]}. How would you detect and mitigate it?`,
-  ];
-  const questions: InterviewQuestion[] = [
-    {
-      category: "Role specific",
-      question: pickVariant(roleQuestions, variant),
-      why: `Tests practical judgment expected in ${profile.label}.`,
-    },
-    {
-      category: "Behavioral",
-      question: pickVariant(behavioralQuestions, variant, 1),
-      why: "Looks for specific ownership, actions, and measurable results.",
-    },
-    {
-      category: "Role level",
-      question: pickVariant(leadershipQuestions, variant, 2),
-      why: `Calibrated to ${levelLabel} scope, autonomy, and influence.`,
-    },
-    {
-      category: "Problem solving",
-      question: pickVariant(problemQuestions, variant, 1),
-      why: "Evaluates structure, assumptions, tradeoffs, and risk reduction.",
-    },
-    {
-      category: interviewType === "behavioral" ? "Collaboration" : "Technical depth",
-      question:
-        interviewType === "behavioral"
-          ? pickVariant(collaborationQuestions, variant, 2)
-          : pickVariant(technicalQuestions, variant, 2),
-      why: interviewType === "behavioral" ? "Reveals empathy and conflict resolution." : "Tests domain depth and decision quality.",
-    },
-  ];
-  const challengeOptions = codingChallenges[key];
-  const challenge = challengeOptions?.[variant % challengeOptions.length];
-  if (challenge && interviewType !== "behavioral") {
-    questions.push({
-      category: "Coding",
-      question: pickVariant(
-        [
-          challenge.title,
-          `${challenge.title}: solve it with clear edge-case handling`,
-          `${challenge.title}: optimize for correctness and readability`,
-        ],
-        variant,
-      ),
-      why: "Includes executable tests in a restricted browser sandbox.",
-      coding: challenge,
-    });
-  }
-  const analysis: RoleAnalysis = {
-    summary: `This ${levelLabel} ${title} interview emphasizes ${profile.label}, ${profile.topics.slice(0, 3).join(", ").toLowerCase()}, and evidence of impact. Questions are derived from the selected role, level, interview type, and job description—not a fixed list.`,
-    technical: [...profile.technical],
-    soft:
-      level === "senior"
-        ? ["Strategic influence", "Executive communication", "Mentorship", "Ownership"]
-        : level === "mid"
-          ? ["Cross-functional collaboration", "Clear communication", "Independent execution"]
-          : level === "entry"
-            ? ["Learning agility", "Communication", "Teamwork", "Ownership"]
-            : ["Curiosity", "Coachability", "Communication", "Learning agility"],
-    topics: [...profile.topics],
-  };
-  return { questions, analysis, containsInstructionLikeText: instructionPattern.test(`${rawTitle} ${rawDescription}`) };
-}
 
 const sampleAnswer =
   "During a cross-functional launch, support and engineering disagreed about which customer issue to solve first. I did not own either roadmap, so I analyzed support tickets and interviewed five account managers. The data showed one workflow caused nearly half of our escalations. I brought both teams into a focused working session, aligned everyone on customer impact, and proposed a two-week experiment. The change reduced related tickets by 38 percent and became part of the next release.";
@@ -394,6 +119,10 @@ export default function Home() {
   const [jobDescription, setJobDescription] = useState(
     "Lead product strategy for a B2B platform. Partner with engineering, design, sales, and customer success. Use data and customer research to prioritize the roadmap and deliver measurable outcomes.",
   );
+  const [resume, setResume] = useState("");
+  const [importerKey, setImporterKey] = useState(0);
+  const [includeCommon, setIncludeCommon] = useState(true);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
   const [roleAnalysis, setRoleAnalysis] = useState<RoleAnalysis | null>(null);
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number | null>(null);
@@ -452,7 +181,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!isAnswerHistoryLoaded) return;
-    window.localStorage.setItem(answerHistoryStorageKey, JSON.stringify(answerHistory.slice(0, 100)));
+    try { window.localStorage.setItem(answerHistoryStorageKey, JSON.stringify(answerHistory.slice(0, 100))); }
+    catch { window.setTimeout(() => setNotice("Browser storage is full. Export your feedback before leaving this page."), 0); }
   }, [answerHistory, isAnswerHistoryLoaded]);
 
   useEffect(() => {
@@ -473,7 +203,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!areSavedSessionsLoaded) return;
-    window.localStorage.setItem(interviewSessionsStorageKey, JSON.stringify(savedSessions.slice(0, 20)));
+    try { window.localStorage.setItem(interviewSessionsStorageKey, JSON.stringify(savedSessions.slice(0, 20))); }
+    catch { window.setTimeout(() => setNotice("Browser storage is full. This interview could not be saved."), 0); }
   }, [savedSessions, areSavedSessionsLoaded]);
 
   useEffect(() => {
@@ -514,7 +245,7 @@ export default function Home() {
   const selectedQuestion =
     selectedQuestionIndex === null ? null : questions[selectedQuestionIndex];
 
-  const score = codeFeedback?.score ?? feedback?.score ?? (feedbackReady ? 8.7 : null);
+  const score = codeFeedback?.score ?? feedback?.score ?? null;
   const sessionAnswerHistory = useMemo(
     () => answerHistory.filter((attempt) => attempt.sessionId === activeSessionId),
     [activeSessionId, answerHistory],
@@ -556,7 +287,7 @@ export default function Home() {
       activeSessionId && matchingSession?.id === activeSessionId
         ? questions.map((item) => item.question)
         : matchingSession?.questions.map((item) => item.question) ?? [];
-    let generated: { questions: InterviewQuestion[]; analysis: RoleAnalysis; containsInstructionLikeText?: boolean };
+    let generated: { questions: InterviewQuestion[]; analysis: RoleAnalysis };
     try {
       const response = await fetch("/api/interview", {
         method: "POST",
@@ -568,6 +299,8 @@ export default function Home() {
           level: difficulty,
           interviewType,
           previousQuestions,
+          resume,
+          includeCommon,
         }),
       });
       const payload = await response.json();
@@ -590,6 +323,8 @@ export default function Home() {
       level: difficulty,
       interviewType,
       jobDescription: jobDescription.trim(),
+      resume,
+      includeCommon,
       questions: generated.questions,
       analysis: generated.analysis,
       createdAt: matchingSession?.createdAt ?? now,
@@ -630,8 +365,11 @@ export default function Home() {
 
   const reviewAnswer = async () => {
     if (!selectedQuestion) return;
-    const submittedAnswer = answer.trim().length < 20 ? sampleAnswer : answer;
-    if (submittedAnswer !== answer) setAnswer(submittedAnswer);
+    const submittedAnswer = answer.trim();
+    if (submittedAnswer.length < 20) {
+      setNotice("Add a complete answer of at least 20 characters before requesting feedback.");
+      return;
+    }
     setIsReviewing(true);
     setFeedbackError("");
     setFeedbackReady(false);
@@ -647,6 +385,9 @@ export default function Home() {
         body: JSON.stringify({
           jobTitle,
           level: difficulty,
+          company,
+          jobDescription,
+          resume,
           question: selectedQuestion.question,
           answer: submittedAnswer,
         }),
@@ -746,6 +487,8 @@ export default function Home() {
     setDifficulty(session.level);
     setInterviewType(session.interviewType);
     setJobDescription(session.jobDescription);
+    setResume(session.resume || "");
+    setIncludeCommon(session.includeCommon ?? true);
     setQuestions(session.questions);
     setRoleAnalysis(session.analysis);
     setActiveSessionId(session.id);
@@ -785,6 +528,9 @@ export default function Home() {
     setInterviewType("mixed");
     setDifficulty("senior");
     setJobDescription("");
+    setResume("");
+    setImporterKey((value) => value + 1);
+    setIncludeCommon(true);
     setStarted(false);
     setQuestions([]);
     setRoleAnalysis(null);
@@ -1031,7 +777,7 @@ export default function Home() {
               <div><p className="section-label">Step 1</p><h2>Build your interview</h2></div>
               <button className="ghost-button" type="button" onClick={resetDemo}>Reset</button>
             </div>
-            <JobUrlImporter onImported={applyImportedJob} />
+            <JobUrlImporter key={importerKey} onImported={applyImportedJob} />
             <label className="field"><span>Job title</span><input maxLength={100} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} /></label>
             <label className="field"><span>Company name</span><input maxLength={100} value={company} onChange={(event) => setCompany(event.target.value)} /></label>
             <div className="field-row">
@@ -1042,7 +788,27 @@ export default function Home() {
               <span>Job description</span>
               <textarea maxLength={4000} value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} />
             </label>
-            <button className="primary-button" type="button" onClick={startPrep} disabled={isStarting}>
+            <label className="field"><span>Your resume (optional)</span><textarea value={resume} maxLength={14000} onChange={(event) => setResume(event.target.value)} placeholder="Paste your resume to practice questions about your experience, projects, and career path." /></label>
+            <label className="field"><span>Upload resume (PDF, DOCX, or TXT)</span><input type="file" accept=".pdf,.docx,.txt" disabled={isUploadingResume || isStarting} onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              if (file.size > 5 * 1024 * 1024) { setNotice("Choose a resume no larger than 5 MB."); return; }
+              setIsUploadingResume(true);
+              try {
+                const form = new FormData(); form.append("resume", file);
+                const response = await fetch("/api/resume-extract", { method: "POST", body: form });
+                const payload = await response.json();
+                if (!response.ok || typeof payload.resumeText !== "string") throw new Error(payload.error || "The resume could not be read.");
+                setResume(payload.resumeText);
+                setNotice("Resume ready. It will be used for questions and saved in this browser with your interview session.");
+              } catch (error) { setNotice(error instanceof Error ? error.message : "Resume upload failed."); }
+              finally { setIsUploadingResume(false); }
+            }} /></label>
+            {isUploadingResume && <p role="status">Reading your resume…</p>}
+            <label className="interview-option"><input type="checkbox" checked={includeCommon} onChange={(event) => setIncludeCommon(event.target.checked)} /> Include common interview questions, introductions, and company motivation</label>
+            <p className="memory-note">Optional resume text is sent for AI coaching and saved with this interview in your browser. Remove contact details you do not want to share.</p>
+            <button className="primary-button" type="button" onClick={startPrep} disabled={isStarting || isUploadingResume}>
               {isStarting ? "Analyzing role and generating questions…" : started ? "Regenerate interview prep" : "Start interview prep"}
             </button>
           </article>

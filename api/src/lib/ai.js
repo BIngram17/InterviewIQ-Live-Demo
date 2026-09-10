@@ -80,8 +80,13 @@ export async function readBody(request, maxBytes = 32_000) {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > maxBytes) throw new ApiError(413, "Request is too large.");
   try {
-    return await request.json();
-  } catch {
+    const raw = await request.text();
+    if (Buffer.byteLength(raw, "utf8") > maxBytes) throw new ApiError(413, "Request is too large.");
+    const body = JSON.parse(raw);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "Request body must be a JSON object.");
+    return body;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(400, "Request body must be valid JSON.");
   }
 }
@@ -238,10 +243,8 @@ export async function completeJson({
       response = await requestGemini({ apiKey, model, system, data, maxTokens, signal: controller.signal });
     } catch (error) {
       if (error?.name === "AbortError") sawTimeout = true;
-      else if (attempt === modelAttempts.length - 1) throw new ApiError(502, "The AI service could not be reached.");
+      else if (attempt === modelAttempts.length - 1) { clearTimeout(attemptTimeout); throw new ApiError(502, "The AI service could not be reached."); }
       response = undefined;
-    } finally {
-      clearTimeout(attemptTimeout);
     }
 
     if (response?.ok) {
@@ -250,12 +253,15 @@ export async function completeJson({
         if (typeof validate === "function" && !validate(parsed)) {
           throw new SyntaxError("Incomplete AI response shape");
         }
+        clearTimeout(attemptTimeout);
         return parsed;
-      } catch {
-        sawInvalidContent = true;
+      } catch (error) {
+        if (controller.signal.aborted || error?.name === "AbortError") sawTimeout = true;
+        else sawInvalidContent = true;
         response = undefined;
       }
     }
+    clearTimeout(attemptTimeout);
     if (response?.status === 429) {
       const retryAfter = Number(response.headers.get("retry-after"));
       rateLimitRetryAfter = Math.max(rateLimitRetryAfter, Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);

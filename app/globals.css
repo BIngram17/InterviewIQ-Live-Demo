@@ -628,3 +628,5 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
   html { scroll-behavior:auto; }
   *,*::before,*::after { animation-duration:.01ms !important; }
 }
+.interview-option { display: flex; align-items: flex-start; gap: 0.65rem; margin: 1rem 0; line-height: 1.5; }
+.interview-option input { flex: 0 0 auto; width: auto; margin-top: 0.3rem; accent-color: #7046f5; }

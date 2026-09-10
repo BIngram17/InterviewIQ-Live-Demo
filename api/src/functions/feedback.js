@@ -6,10 +6,13 @@ app.http("feedback", {
   authLevel: "anonymous",
   route: "feedback",
   handler: withApi(async (request) => {
-    const body = await readBody(request);
+    const body = await readBody(request, 100_000);
     const question = text(body.question, 500);
     const answer = text(body.answer, 7000);
     const jobTitle = text(body.jobTitle, 100);
+    const resume = text(body.resume, 14_000);
+    const company = text(body.company, 100);
+    const jobDescription = text(body.jobDescription, 6000);
     const level = ["internship", "entry", "mid", "senior"].includes(body.level) ? body.level : "mid";
 
     if (!question || answer.length < 20) throw new ApiError(400, "Add a complete answer before requesting feedback.");
@@ -17,9 +20,9 @@ app.http("feedback", {
     const raw = await completeJson({
       system:
         "You are InterviewIQ, an exacting but supportive interview coach. Evaluate only the candidate answer against the interview question and role. " +
-        "Do not invent achievements. Reward specificity, structure, judgment, level-appropriate scope, and measurable evidence. " +
+        "Use supplied resume facts as context, but do not penalize relevant new facts the candidate shares in their answer. For introductions and motivation, evaluate relevance, clarity, and authentic fit; do not force STAR or numerical outcomes where inappropriate. Never invent company facts or candidate facts in improved answers; use bracketed placeholders for missing details. Do not invent achievements. Reward specificity, structure, judgment, level-appropriate scope, and measurable evidence. " +
         'Return JSON with shape {"score":number 1-10,"strengths":string[],"improvements":string[],"coaching":string,"improvedAnswer":string}.',
-      data: { jobTitle, level, question, answer },
+      data: { jobTitle, company, jobDescription, resume, level, question, answer },
       maxTokens: 1200,
       validate: (value) => (
         Number.isFinite(Number(value?.score))

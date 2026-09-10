@@ -25,6 +25,10 @@ Times New Roman 12-point DOCX export.
 
 - Generates six live behavioral, technical, and coding questions from the job
   title, description, interview type, company, and role level
+- Accepts optional PDF/DOCX/TXT resumes or pasted resume text for questions about
+  specific experience and projects; saves resume context with interview sessions
+- Includes an optional common-question mix covering introductions, company
+  motivation, strengths, setbacks, and career goals across technical and nontechnical roles
 - Supports internship, entry-level, mid-level, and senior interview calibration
 - Imports public job-posting URLs and uses AI to prefill the title, company,
   role level, and description
@@ -35,6 +39,8 @@ Times New Roman 12-point DOCX export.
   browser provides the Web Speech API
 - Provides a dedicated, AI-generated Coding Practice workspace for JavaScript,
   Python, Java, C#, and Rust
+- Adds a debugging mode with faulty starter code in the chosen language,
+  test-driven repairs, reset-to-original code, and saved debugging progress
 - Guides learners through understanding the prompt, identifying edge cases,
   planning, pseudocode, implementation, testing, complexity, and final review,
   with visible progress and free movement among unlocked steps
@@ -79,7 +85,7 @@ Times New Roman 12-point DOCX export.
 - Generates 325-400 word cover letters, exports them as TXT or DOCX, and
   preserves up to ten generated versions; if only the final length-adjustment
   request is rate-limited, the usable draft remains visible and clearly labeled
-- Provides a persistent Interview Prep / Resume Studio switcher on desktop and mobile
+- Provides a persistent Interview Prep / Coding Practice / Resume Studio switcher on desktop and mobile
 - Accepts drag-and-drop PDF, DOCX, and TXT resumes and extracts their text
   without permanently storing the uploaded file
 - Runs Playwright end-to-end tests for the tailored application flow, local
@@ -314,3 +320,15 @@ understandable.
 ## License
 
 Released under the [MIT License](LICENSE).
+## Verification and performance evidence
+
+Run `npm --prefix api test`, `npm run lint`, `npm run test:e2e`, and
+`npm run build` to verify the application. Pull requests run these checks;
+production deployment occurs on main to avoid consuming Azure preview slots.
+
+Run `node scripts/benchmark.mjs` for the reproducible local HTTP benchmark.
+It exercises request validation, source harness generation for five languages,
+and ten-criterion resume scoring. It excludes AI inference, sandbox execution,
+Azure hosting, and Internet latency. See [measured results](docs/performance.md)
+for test conditions and resume-ready claims. The benchmark does not establish
+production AI concurrency or a before/after latency reduction.
