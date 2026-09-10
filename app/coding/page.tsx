@@ -12,7 +12,7 @@ type Difficulty = "beginner" | "intermediate" | "advanced";
 type Topic = "arrays-strings" | "maps-sets" | "stacks-queues" | "sorting-search" | "recursion-dp" | "practical-data";
 type CoachingStage = "understand" | "edge-cases" | "approach" | "pseudocode" | "implementation" | "testing" | "complexity";
 type CodingTest = { input: unknown; expected: unknown };
-type Challenge = { title: string; goal: string; prompt: string; examples: string[]; constraints: string[]; concepts: string[]; inputType: ExecutionValueType; outputType: ExecutionValueType; tests: CodingTest[]; language: CodeLanguage; difficulty: Difficulty; topic: Topic };
+type Challenge = { mode?: "solve" | "debug"; starterCode?: string; title: string; goal: string; prompt: string; examples: string[]; constraints: string[]; concepts: string[]; inputType: ExecutionValueType; outputType: ExecutionValueType; tests: CodingTest[]; language: CodeLanguage; difficulty: Difficulty; topic: Topic };
 type CoachFeedback = { assessment: string; whatWorks: string[]; nextActions: string[]; hint: string };
 type FinalReview = { score: number; verdict: string; strengths: string[]; improvements: string[]; complexity: string };
 type TestResult = { passed: boolean; actual?: unknown; expected?: unknown; error?: string };
@@ -80,7 +80,7 @@ function inferredType(values: unknown[], existing: unknown): ExecutionValueType 
 function normalizeChallenge(value: unknown): Challenge | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<Challenge>;
-  if (!candidate.title || !Array.isArray(candidate.tests) || candidate.tests.length === 0) return null;
+  if (!candidate.title || !candidate.prompt || !Array.isArray(candidate.examples) || !Array.isArray(candidate.constraints) || !Array.isArray(candidate.concepts) || !Array.isArray(candidate.tests) || candidate.tests.length === 0) return null;
   const inputType = inferredType(candidate.tests.map((test) => test?.input), candidate.inputType);
   const outputType = inferredType(candidate.tests.map((test) => test?.expected), candidate.outputType);
   if (!inputType || !outputType) return null;
@@ -101,7 +101,7 @@ function normalizeSavedChallenge(value: unknown): SavedCodingChallenge | null {
     difficulty: ["beginner", "intermediate", "advanced"].includes(candidate.difficulty || "") ? candidate.difficulty as Difficulty : "intermediate",
     topic: candidate.topic || "arrays-strings",
     roleContext: typeof candidate.roleContext === "string" ? candidate.roleContext : "",
-    activeStep: Number.isInteger(candidate.activeStep) ? candidate.activeStep as number : 0,
+    activeStep: Number.isInteger(candidate.activeStep) ? Math.max(0, Math.min(7, candidate.activeStep as number)) : 0,
     notes: candidate.notes && typeof candidate.notes === "object" ? candidate.notes : {},
     coachFeedback: candidate.coachFeedback && typeof candidate.coachFeedback === "object" ? candidate.coachFeedback : {},
     code: typeof candidate.code === "string" ? candidate.code : starterFor(candidate.language || "javascript", challenge),
@@ -129,6 +129,7 @@ function defaultValue(language: CodeLanguage, type: ExecutionValueType) {
 }
 
 function starterFor(language: CodeLanguage, challenge?: Challenge | null) {
+  if (challenge?.mode === "debug" && challenge.language === language && challenge.starterCode) return challenge.starterCode;
   const inputType = challenge?.inputType || "integer-array";
   const outputType = challenge?.outputType || "integer-array";
   if (language === "javascript") return "function solution(input) {\n  // Translate your pseudocode into code.\n  return input;\n}";
@@ -167,6 +168,7 @@ export default function CodingPracticePage() {
   const [language, setLanguage] = useState<CodeLanguage>("javascript");
   const [difficulty, setDifficulty] = useState<Difficulty>("intermediate");
   const [topic, setTopic] = useState<Topic>("arrays-strings");
+  const [mode, setMode] = useState<"solve" | "debug">("solve");
   const [roleContext, setRoleContext] = useState("");
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -212,6 +214,7 @@ export default function CodingPracticePage() {
         setTopic(normalizedActive.topic);
         setRoleContext(normalizedActive.roleContext);
         setChallenge(normalizedActive.challenge);
+        setMode(normalizedActive.challenge.mode || "solve");
         setActiveStep(Math.max(0, Math.min(stages.length - 1, normalizedActive.activeStep)));
         setNotes(normalizedActive.notes);
         setCoachFeedback(normalizedActive.coachFeedback);
@@ -238,7 +241,7 @@ export default function CodingPracticePage() {
       setRunnerError(error);
       setTestResults(results);
       setIsRunning(false);
-      if (error || results.some((result: TestResult) => !result.passed)) {
+      if (error || results.length !== challenge?.tests.length || results.some((result: TestResult) => !result.passed)) {
         setFailedAttempts((value) => Math.min(20, value + 1));
       }
       setStatus(error || `${results.filter((result: TestResult) => result.passed).length}/${challenge?.tests.length || 0} browser tests passed.`);
@@ -291,7 +294,7 @@ export default function CodingPracticePage() {
       const response = await fetch("/api/coding-challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, difficulty, topic, roleContext, previousTitles: Array.isArray(savedTitles) ? savedTitles : [] }),
+        body: JSON.stringify({ mode, language, difficulty, topic, roleContext, previousTitles: Array.isArray(savedTitles) ? savedTitles : [] }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload) throw new Error(payload?.error || "A coding challenge could not be generated.");
@@ -316,6 +319,11 @@ export default function CodingPracticePage() {
   };
 
   const changeLanguage = (next: CodeLanguage) => {
+    if (challenge?.mode === "debug" && next !== challenge.language) {
+      setChallenge(null);
+      setMode("debug");
+      setStatus("Choose Generate to create a debugging exercise in the new language.");
+    }
     setLanguage(next);
     setCode(starterFor(next, challenge));
     setTestResults([]);
@@ -328,6 +336,7 @@ export default function CodingPracticePage() {
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (!["Tab", "Enter", "}", "]", ")"].includes(event.key)) return;
+    if (isRunning) return;
     const target = event.currentTarget;
     const edit = applyCodeEditorKey({ value: code, selectionStart: target.selectionStart, selectionEnd: target.selectionEnd, key: event.key, shiftKey: event.shiftKey, language });
     if (!edit) return;
@@ -403,7 +412,7 @@ export default function CodingPracticePage() {
   };
 
   const requestFinalReview = async () => {
-    if (!challenge) return;
+    if (!challenge || testResults.length !== challenge.tests.length || !testResults.every((result) => result.passed)) return;
     setIsReviewing(true);
     setStatus("");
     setReviewError("");
@@ -456,6 +465,7 @@ export default function CodingPracticePage() {
     setTopic(saved.topic);
     setRoleContext(saved.roleContext);
     setChallenge(saved.challenge);
+    setMode(saved.challenge.mode || "solve");
     setActiveStep(Math.max(0, Math.min(stages.length - 1, saved.activeStep)));
     setNotes(saved.notes);
     setCoachFeedback(saved.coachFeedback);
@@ -497,14 +507,15 @@ export default function CodingPracticePage() {
         <section className="studio-hero coding-hero"><div><p className="eyebrow">Guided coding practice</p><h1>Learn how to solve—not just what to type.</h1><p>Work from prompt comprehension through planning, implementation, real test execution, complexity analysis, and an evidence-based AI review.</p></div><div className="hero-card"><span className="status-dot" /><div><p className="hero-card-label">Safe live demo</p><p className="hero-card-value">5 languages · sandboxed test execution</p></div></div></section>
 
         <section className="panel coding-setup-panel">
-          <div className="panel-header"><div><p className="section-label">Challenge setup</p><h2>Choose what to practice</h2></div>{challenge && <button className="ghost-button" type="button" onClick={startNewChallenge}>Start new</button>}</div>
+          <div className="panel-header"><div><p className="section-label">Challenge setup</p><h2>Choose what to practice</h2></div>{challenge && <button className="ghost-button" type="button" disabled={isRunning || isGenerating || isCoaching || isReviewing} onClick={startNewChallenge}>Start new</button>}</div>
           <div className="coding-setup-grid">
             <label className="field"><span>Language</span><select value={language} onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}>{languages.map((item) => <option value={item} key={item}>{languageLabel(item)}</option>)}</select></label>
             <label className="field"><span>Difficulty</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty)}><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
+            <label className="field"><span>Practice mode</span><select value={mode} onChange={(event) => setMode(event.target.value as "solve" | "debug")}><option value="solve">Build a solution</option><option value="debug">Debug and fix errors</option></select></label>
             <label className="field"><span>Topic</span><select value={topic} onChange={(event) => setTopic(event.target.value as Topic)}><option value="arrays-strings">Arrays and strings</option><option value="maps-sets">Maps and sets</option><option value="stacks-queues">Stacks and queues</option><option value="sorting-search">Sorting and searching</option><option value="recursion-dp">Recursion and dynamic programming</option><option value="practical-data">Practical data processing</option></select></label>
             <label className="field role-context-field"><span>Optional job or role context</span><input value={roleContext} maxLength={300} onChange={(event) => setRoleContext(event.target.value)} placeholder="Example: entry-level backend developer in healthcare" /></label>
           </div>
-          <button className="primary-button generate-coding-button" type="button" onClick={generateChallenge} disabled={isGenerating}>{isGenerating ? "Generating a fresh challenge…" : challenge ? "Generate a different challenge" : "Generate guided challenge"}</button>
+          <button className="primary-button generate-coding-button" type="button" onClick={generateChallenge} disabled={isGenerating || isRunning || isCoaching || isReviewing}>{isGenerating ? "Generating a fresh challenge…" : challenge ? "Generate a different challenge" : "Generate guided challenge"}</button>
           {status && <p className="studio-status" role="status">{status}</p>}
         </section>
 
@@ -516,7 +527,7 @@ export default function CodingPracticePage() {
             return <article className={`coding-history-card ${isCurrent ? "active-coding-history" : ""}`} key={saved.id}>
               <div className="coding-history-heading"><div><h3>{saved.challenge.title}</h3><p>{languageLabel(saved.language)} · {saved.difficulty} · {formatSavedDate(saved.savedAt)}</p></div>{isCurrent && <span>Active</span>}</div>
               <div className="coding-history-progress"><div><i style={{ width: `${Math.round((completedSteps / stages.length) * 100)}%` }} /></div><span>{completedSteps} of {stages.length} steps</span></div>
-              <div className="memory-card-actions"><button className="small-action-button" type="button" onClick={() => restoreSavedChallenge(saved)}>{isCurrent ? "Continue" : "Open challenge"}</button><button className="small-action-button danger-button" type="button" onClick={() => deleteSavedChallenge(saved)}>Delete</button></div>
+              <div className="memory-card-actions"><button className="small-action-button" type="button" disabled={isRunning || isGenerating || isCoaching || isReviewing} onClick={() => restoreSavedChallenge(saved)}>{isCurrent ? "Continue" : "Open challenge"}</button><button className="small-action-button danger-button" type="button" onClick={() => deleteSavedChallenge(saved)}>Delete</button></div>
             </article>;
           })}</div>}
         </section>
@@ -525,6 +536,7 @@ export default function CodingPracticePage() {
           <section className="panel challenge-overview">
             <div className="challenge-heading"><div><p className="section-label">{languageLabel(language)} · {difficulty}</p><h2>{challenge.title}</h2><p>{challenge.goal}</p></div><CopyButton text={challengeText(challenge)} label="Copy challenge" copiedLabel="Challenge copied" /></div>
             <p className="challenge-prompt">{challenge.prompt}</p>
+            {challenge.mode === "debug" && <p className="memory-note">Debugging exercise: reproduce the failure, identify the cause, and fix the supplied code. All test cases must pass before you continue.</p>}
             <div className="challenge-details"><div><h3>Examples</h3>{challenge.examples.map((item) => <code key={item}>{item}</code>)}</div><div><h3>Constraints</h3><ul>{challenge.constraints.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
             <div className="analysis-chip-list">{challenge.concepts.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div>
           </section>
@@ -538,13 +550,13 @@ export default function CodingPracticePage() {
             })}</aside>
 
             <article className="panel guided-step-panel">
-              <div className="guided-step-heading"><span>{current.number}</span><div><p className="section-label">Problem-solving workflow</p><h2>{current.title}</h2><p>{current.guidance}</p></div></div>
+              <div className="guided-step-heading"><span>{current.number}</span><div><p className="section-label">Problem-solving workflow</p><h2>{challenge.mode === "debug" && current.id === "implementation" ? "Diagnose and fix the code" : current.title}</h2><p>{challenge.mode === "debug" && current.id === "implementation" ? "Run the faulty implementation, inspect the failures, and make the smallest correct repair. Reset code restores the original bugs." : current.guidance}</p></div></div>
 
               {current.id === "implementation" ? <div className="guided-editor">
-                <div className="language-tabs" role="group" aria-label="Programming language">{languages.map((item) => <button className={language === item ? "active" : ""} type="button" key={item} onClick={() => changeLanguage(item)}>{languageLabel(item)}</button>)}</div>
+                <div className="language-tabs" role="group" aria-label="Programming language">{languages.map((item) => <button className={language === item ? "active" : ""} type="button" key={item} disabled={isRunning || (challenge.mode === "debug" && item !== challenge.language)} onClick={() => changeLanguage(item)}>{languageLabel(item)}</button>)}</div>
                 <div className="editor-toolbar"><span>{languageLabel(language)} solution</span><small id="guided-editor-help">Tab indents · Shift+Tab outdents · Enter keeps indentation</small></div>
-                <textarea className="code-editor guided-code-editor" value={code} maxLength={12000} spellCheck={false} aria-label={`${languageLabel(language)} solution`} aria-describedby="guided-editor-help" onChange={(event) => { setCode(event.target.value); setTestResults([]); setRunnerError(""); setFinalReview(null); }} onKeyDown={handleEditorKeyDown} />
-                <div className="code-actions"><button className="ghost-button" type="button" onClick={() => { setCode(starterFor(language, challenge)); setTestResults([]); setRunnerError(""); setFinalReview(null); }}>Reset code</button><CopyButton text={code} label="Copy code" copiedLabel="Code copied" /></div>
+                <textarea className="code-editor guided-code-editor" readOnly={isRunning} value={code} maxLength={12000} spellCheck={false} aria-label={`${languageLabel(language)} solution`} aria-describedby="guided-editor-help" onChange={(event) => { setCode(event.target.value); setTestResults([]); setRunnerError(""); setFinalReview(null); }} onKeyDown={handleEditorKeyDown} />
+                <div className="code-actions"><button className="ghost-button" type="button" disabled={isRunning} onClick={() => { setCode(starterFor(language, challenge)); setTestResults([]); setRunnerError(""); setFinalReview(null); }}>Reset code</button><CopyButton text={code} label="Copy code" copiedLabel="Code copied" /></div>
                 <section className={`implementation-test-gate ${allTestsPassed ? "passed" : ""}`}>
                   <div><p className="section-label">Required checkpoint</p><h3>{allTestsPassed ? "All tests passed—next step unlocked" : `Pass all ${challenge.tests.length} tests to continue`}</h3><p>{allTestsPassed ? "Your implementation satisfied every provided test case." : "Run your code in the sandbox. Later workflow steps stay locked until the implementation is correct."}</p></div>
                   <button className="primary-button" type="button" onClick={runTests} disabled={isRunning}>{isRunning ? `Running ${languageLabel(language)} tests…` : allTestsPassed ? "Run tests again" : `Run ${challenge.tests.length} tests`}</button>

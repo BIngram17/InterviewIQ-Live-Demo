@@ -96,6 +96,8 @@ export default function ResumeStudio() {
   const [candidateProfileStatus, setCandidateProfileStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reviewFormattingLoadedRef = useRef(false);
+  const requestRevision = useRef(0);
+  useEffect(() => { requestRevision.current += 1; }, [activeApplicationId, resume, jobTitle, company, level, jobDescription, candidateProfile, boldImportantPhrases]);
 
   useEffect(() => { document.documentElement.dataset.theme = isDarkMode ? "dark" : "light"; }, [isDarkMode]);
 
@@ -371,6 +373,7 @@ export default function ResumeStudio() {
   const candidateProfileSections = Object.values(candidateProfile).filter((value) => value.trim()).length;
 
   const runTool = async (action: "review" | "cover-letter") => {
+    const revision = requestRevision.current;
     if (!toolsReady || (action === "review" && reviewRetrySeconds > 0) || (action === "cover-letter" && coverRetrySeconds > 0)) return;
     const setBusy = action === "review" ? setIsReviewing : setIsGeneratingCover;
     const setStatus = action === "review" ? setResumeStatus : setCoverStatus;
@@ -386,6 +389,7 @@ export default function ResumeStudio() {
         body: JSON.stringify({ action, resume, candidateProfile, jobTitle, company, level, jobDescription, tone: coverTone, emphasizeKeywords: action === "review" && boldImportantPhrases, previousReview }),
       });
       const payload = await response.json();
+      if (revision !== requestRevision.current) return;
       if (!response.ok) {
         if (action === "review" && response.status === 429) {
           const retryAfter = Number(response.headers.get("Retry-After"));
@@ -419,6 +423,7 @@ export default function ResumeStudio() {
           }),
         });
         const changesPayload = await changesResponse.json();
+        if (revision !== requestRevision.current) return;
         if (!changesResponse.ok) {
           if (changesResponse.status === 429) {
             const retryAfter = Number(changesResponse.headers.get("Retry-After"));
@@ -614,7 +619,7 @@ function ReviewResultView({ result }: { result: ResumeResult }) {
         <div className="change-card-header"><span>{change.priority ? `${capitalize(change.priority)} priority · ` : ""}{change.section}</span><span className={change.kind === "needs-info" ? "needs-info" : "safe-rewrite"}>{change.kind === "needs-info" ? "Needs your confirmation" : "Uses confirmed evidence"}</span></div>
         <div className="change-placement"><span>{formatOperation(change.operation)}</span><p><strong>Where:</strong> {change.placement || `In the ${change.section} section`}</p></div>
         {change.sourceEvidence && <p className="source-evidence"><strong>{change.operation === "replace" ? "Replace this text:" : change.operation === "move" ? "Move this text:" : "Confirmed evidence:"}</strong> “{change.sourceEvidence}”</p>}
-        {change.scoreImpact && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}
+        {Boolean(change.scoreImpact) && <p className="score-impact"><strong>Potential lift:</strong> up to +{change.scoreImpact} points</p>}
         {change.relatedRequirement && <p className="related-requirement"><strong>Targets:</strong> {change.relatedRequirement}</p>}
         {change.currentIssue && <p><strong>Issue:</strong> {change.currentIssue}</p>}<p><strong>Change:</strong> {change.suggestion}</p>
         {change.example && <div><strong>Example</strong><p><BoldText text={change.example} /></p><CopyButton text={stripBoldMarkers(change.example)} html={boldMarkdownToHtml(change.example)} label="Copy example" copiedLabel="Example copied" /></div>}

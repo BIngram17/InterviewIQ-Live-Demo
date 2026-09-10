@@ -245,7 +245,7 @@ export function buildRubricFallbackChanges(criteria, limit = 4, resumeEvidence =
   const statusRank = { missing: 0, partial: 1, met: 2 };
   const importanceRank = { required: 0, preferred: 1, quality: 2 };
   const sorted = (Array.isArray(criteria) ? criteria : [])
-    .filter((item) => compact(item?.id, 60) && compact(item?.requirement, 260))
+    .filter((item) => item?.status !== "met" && compact(item?.id, 60) && compact(item?.requirement, 260))
     .sort((left, right) => (
       (statusRank[safeStatus(left?.status)] - statusRank[safeStatus(right?.status)])
       || (importanceRank[compact(left?.importance, 20).toLowerCase()] ?? 2) - (importanceRank[compact(right?.importance, 20).toLowerCase()] ?? 2)
@@ -268,7 +268,7 @@ export function buildRubricFallbackChanges(criteria, limit = 4, resumeEvidence =
       relatedRequirement: requirement,
       kind: "needs-info",
       priority: isRequiredGap || status === "missing" ? "high" : status === "partial" ? "medium" : "low",
-      scoreImpact: isRequiredGap ? 8 : status === "missing" ? 6 : status === "partial" ? 4 : 2,
+      scoreImpact: 0,
     };
   });
 }

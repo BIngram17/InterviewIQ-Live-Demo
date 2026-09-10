@@ -30,7 +30,7 @@ export function valueMatchesExecutionType(value, type) {
   return value.every((item) => valueMatchesExecutionType(item, itemType));
 }
 
-export function validateChallenge(value) {
+export function validateChallenge(value, mode = "solve") {
   if (!value || typeof value !== "object") return null;
   const title = text(value.title, 140);
   const prompt = text(value.prompt, 1600);
@@ -50,5 +50,7 @@ export function validateChallenge(value) {
     : [];
   if (!title || !prompt || !goal || !inputType || !outputType || examples.length < 1 || constraints.length < 2 || tests.length < 3) return null;
   if (tests.some((test) => !valueMatchesExecutionType(test.input, inputType) || !valueMatchesExecutionType(test.expected, outputType))) return null;
-  return { title, prompt, goal, examples, constraints, concepts, inputType, outputType, tests };
+  const starterCode = typeof value.starterCode === "string" ? value.starterCode.replace(/\r\n?/g, "\n").trim() : "";
+  if (mode === "debug" && (!starterCode || starterCode.length > 6000 || !/\bsolution\s*\(/.test(starterCode))) return null;
+  return { title, prompt, goal, examples, constraints, concepts, inputType, outputType, tests, mode, ...(mode === "debug" ? { starterCode } : {}) };
 }

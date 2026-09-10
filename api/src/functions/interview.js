@@ -28,10 +28,12 @@ app.http("interview", {
   authLevel: "anonymous",
   route: "interview",
   handler: withApi(async (request) => {
-    const body = await readBody(request);
+    const body = await readBody(request, 100_000);
     const jobTitle = text(body.jobTitle, 100);
     const company = text(body.company, 100);
     const jobDescription = text(body.jobDescription, 6000);
+    const resume = text(body.resume, 14_000);
+    const includeCommon = body.includeCommon !== false;
     const level = levels.has(body.level) ? body.level : "mid";
     const interviewType = interviewTypes.has(body.interviewType) ? body.interviewType : "mixed";
     const previousQuestions = arrayOfText(body.previousQuestions, 10, 420);
@@ -44,11 +46,13 @@ app.http("interview", {
       system:
         "You are InterviewIQ, an expert interview coach. Analyze the exact role and create six fresh, realistic interview questions. " +
         "Calibrate scope, autonomy, and leadership to the role level. Internship questions should emphasize learning, fundamentals, coachability, and achievable scoped contributions rather than prior leadership experience. Use concrete responsibilities and skills from the job description. " +
-        "Avoid every question in previousQuestions and avoid generic filler. For mixed or technical software/data roles, include exactly one coding question. " +
+        "Avoid repeating previousQuestions. When includeCommon is true, dedicate two questions to typical interviews: one introduction or career story (such as tell me about yourself) and one motivation, company interest, strengths, setbacks, or career goals. Vary these on regeneration. Ask why the candidate wants to work at the named company without inventing company facts beyond the supplied description. " +
+        "When resume is supplied, dedicate two further questions to specific experience, projects, or transitions explicitly present in it. Do not assume skills, employment, achievements, or protected personal characteristics. Other questions should match the job and interviewType. Behavioral sets must not include coding. For mixed or technical software/data roles, include exactly one coding question among the remaining questions. " +
         "A coding question must be language-neutral and solvable in JavaScript, Python, or Java in 20 minutes. " +
         'Return JSON with shape {"analysis":{"summary":string,"technical":string[],"soft":string[],"topics":string[]},"questions":[{"category":string,"question":string,"why":string,"coding"?:{"title":string,"prompt":string,"examples":string}}]}.',
-      data: { jobTitle, company, jobDescription, level, interviewType, previousQuestions, generationNonce: crypto.randomUUID() },
-      maxTokens: 1800,
+      data: { jobTitle, company, jobDescription, level, interviewType, resume, includeCommon, previousQuestions, generationNonce: crypto.randomUUID() },
+      maxTokens: 2200,
+      validate: (value) => Array.isArray(value?.questions) && value.questions.length === 6 && value.questions.every(validateQuestion) && Boolean(value?.analysis?.summary),
     });
 
     const analysis = {
@@ -61,7 +65,7 @@ app.http("interview", {
       ? raw.questions.map(validateQuestion).filter(Boolean).slice(0, 6)
       : [];
 
-    if (!analysis.summary || analysis.technical.length < 2 || analysis.soft.length < 2 || questions.length < 4) {
+    if (!analysis.summary || analysis.technical.length < 2 || analysis.soft.length < 2 || questions.length !== 6) {
       throw new ApiError(502, "The AI response did not contain a complete interview set.");
     }
     return { analysis, questions, provider: "Google AI Studio" };
