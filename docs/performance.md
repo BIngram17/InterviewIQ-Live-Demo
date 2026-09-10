@@ -50,6 +50,20 @@ Dependency maintenance updated Next.js to 16.3.4, sharp to 0.35.4, and
 the DOCX parser's xmldom dependency to 0.8.15. Both npm audits reported zero known
 vulnerabilities after updating. A DOCX round-trip test verifies text extraction.
 
+## Production smoke check
+
+The September 10 release deployed successfully to Azure. A synthetic customer
+support candidate received six questions in one 12.15-second request, including
+introduction, company motivation, and questions grounded in their training-guide
+and billing-support experience. This is one observation, not a latency percentile.
+
+Debugging challenge generation returned starter code for all five languages.
+Live external execution could not be verified: the app reported sandbox
+unavailability, and a direct Wandbox request for `print(1)` returned HTTP 500.
+The configured compiler identifiers were still present in the provider's list.
+Service failures do not count as failed learner attempts. Browser JavaScript
+execution is covered by the automated browser suite and does not use Wandbox.
+
 ## Defensible resume statements
 
 - Benchmarked backend validation, code-harness generation, and resume scoring
