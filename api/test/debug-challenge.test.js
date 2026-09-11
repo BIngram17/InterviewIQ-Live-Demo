@@ -33,6 +33,7 @@ test("debug projects require safe distinct files and symptom reports", () => {
   const project = { ...fixture, files, bugReports: ["Returning customers receive no discount."] };
   const valid = validateChallenge(project, "debug", true);
   assert.equal(valid.files.length, 3);
+  assert.equal(valid.examples[0], '"" → 0');
   assert.equal(valid.starterCode, files.map((f) => f.content).join("\n\n"));
   assert.equal(validateChallenge({ ...project, bugReports: [] }, "debug", true), null);
   assert.equal(validateChallenge({ ...project, files: files.slice(0, 2) }, "debug", true), null);

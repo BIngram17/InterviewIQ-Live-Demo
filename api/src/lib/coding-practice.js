@@ -35,7 +35,7 @@ export function validateChallenge(value, mode = "solve", requireProject = false)
   const title = text(value.title, 140);
   const prompt = text(value.prompt, 1600);
   const goal = text(value.goal, 500);
-  const examples = arrayOfText(value.examples, 3, 500);
+  let examples = arrayOfText(value.examples, 3, 500);
   const constraints = arrayOfText(value.constraints, 8, 220);
   const concepts = arrayOfText(value.concepts, 6, 100);
   const inputType = executionValueTypes.has(value.inputType) ? value.inputType : "";
@@ -48,6 +48,7 @@ export function validateChallenge(value, mode = "solve", requireProject = false)
       return { input, expected };
     }).filter(Boolean)
     : [];
+  if (mode === "debug") examples = tests.slice(0, 3).map((test) => `${JSON.stringify(test.input)} → ${JSON.stringify(test.expected)}`);
   if (!title || !prompt || !goal || !inputType || !outputType || examples.length < 1 || constraints.length < 2 || tests.length < 3) return null;
   if (tests.some((test) => !valueMatchesExecutionType(test.input, inputType) || !valueMatchesExecutionType(test.expected, outputType))) return null;
   let files;
