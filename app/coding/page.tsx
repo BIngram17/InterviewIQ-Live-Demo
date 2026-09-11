@@ -12,7 +12,8 @@ type Difficulty = "beginner" | "intermediate" | "advanced";
 type Topic = "arrays-strings" | "maps-sets" | "stacks-queues" | "sorting-search" | "recursion-dp" | "practical-data";
 type CoachingStage = "understand" | "edge-cases" | "approach" | "pseudocode" | "implementation" | "testing" | "complexity";
 type CodingTest = { input: unknown; expected: unknown };
-type Challenge = { mode?: "solve" | "debug"; starterCode?: string; title: string; goal: string; prompt: string; examples: string[]; constraints: string[]; concepts: string[]; inputType: ExecutionValueType; outputType: ExecutionValueType; tests: CodingTest[]; language: CodeLanguage; difficulty: Difficulty; topic: Topic };
+type ProjectFile = { name: string; content: string };
+type Challenge = { files?: ProjectFile[]; bugReports?: string[]; mode?: "solve" | "debug"; starterCode?: string; title: string; goal: string; prompt: string; examples: string[]; constraints: string[]; concepts: string[]; inputType: ExecutionValueType; outputType: ExecutionValueType; tests: CodingTest[]; language: CodeLanguage; difficulty: Difficulty; topic: Topic };
 type CoachFeedback = { assessment: string; whatWorks: string[]; nextActions: string[]; hint: string };
 type FinalReview = { score: number; verdict: string; strengths: string[]; improvements: string[]; complexity: string };
 type TestResult = { passed: boolean; actual?: unknown; expected?: unknown; error?: string };
@@ -28,6 +29,7 @@ type SavedCodingChallenge = {
   notes: Record<string, string>;
   coachFeedback: Record<string, CoachFeedback>;
   code: string;
+  projectFiles?: ProjectFile[];
   testResults: TestResult[];
   finalReview: FinalReview | null;
   failedAttempts: number;
@@ -80,6 +82,7 @@ function inferredType(values: unknown[], existing: unknown): ExecutionValueType 
 function normalizeChallenge(value: unknown): Challenge | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<Challenge>;
+  if (candidate.files && (!Array.isArray(candidate.files) || candidate.files.length < 1 || candidate.files.length > 5 || candidate.files.some((file) => typeof file?.name !== "string" || typeof file?.content !== "string"))) return null;
   if (!candidate.title || !candidate.prompt || !Array.isArray(candidate.examples) || !Array.isArray(candidate.constraints) || !Array.isArray(candidate.concepts) || !Array.isArray(candidate.tests) || candidate.tests.length === 0) return null;
   const inputType = inferredType(candidate.tests.map((test) => test?.input), candidate.inputType);
   const outputType = inferredType(candidate.tests.map((test) => test?.expected), candidate.outputType);
@@ -139,8 +142,17 @@ function starterFor(language: CodeLanguage, challenge?: Challenge | null) {
   return `fn solution(input: ${languageType(language, inputType)}) -> ${languageType(language, outputType)} {\n    // Translate your pseudocode into code.\n    ${defaultValue(language, outputType)}\n}`;
 }
 
+function joinFiles(files: ProjectFile[]) { return files.map((file) => file.content).join("\n\n"); }
+function originalFiles(challenge: Challenge): ProjectFile[] {
+  return challenge.files || [{ name: "solution." + ({ javascript: "js", python: "py", java: "java", csharp: "cs", rust: "rs" })[challenge.language], content: challenge.starterCode || "" }];
+}
+function restoredFiles(saved: SavedCodingChallenge): ProjectFile[] {
+  const originals = originalFiles(saved.challenge);
+  const edits = Array.isArray(saved.projectFiles) ? saved.projectFiles : [];
+  return originals.map((file) => ({ ...file, content: edits.find((item) => item?.name === file.name && typeof item.content === "string")?.content ?? (originals.length === 1 ? saved.code : file.content) }));
+}
 function challengeText(challenge: Challenge) {
-  return `${challenge.title}\n${challenge.prompt}\nExamples:\n${challenge.examples.join("\n")}\nConstraints:\n${challenge.constraints.join("\n")}`;
+  return `${challenge.title}\n${challenge.prompt}\nReported symptoms:\n${(challenge.bugReports || []).join("\n")}\nExamples:\n${challenge.examples.join("\n")}\nConstraints:\n${challenge.constraints.join("\n")}`;
 }
 
 function newPracticeId() {
@@ -153,6 +165,7 @@ function formatSavedDate(value: string) {
 }
 
 function savedProgress(saved: SavedCodingChallenge) {
+  if (saved.challenge.mode === "debug") return Number(saved.testResults.length === saved.challenge.tests.length && saved.testResults.every((result) => result.passed)) + Number(Boolean(saved.finalReview));
   let completed = 0;
   stages.forEach((stage) => {
     if (stage.id === "implementation" && saved.testResults.length === saved.challenge.tests.length && saved.testResults.every((result) => result.passed)) completed += 1;
@@ -175,6 +188,8 @@ export default function CodingPracticePage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [coachFeedback, setCoachFeedback] = useState<Record<string, CoachFeedback>>({});
   const [code, setCode] = useState(starterFor("javascript"));
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [selectedFile, setSelectedFile] = useState(0);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [runnerError, setRunnerError] = useState("");
   const [finalReview, setFinalReview] = useState<FinalReview | null>(null);
@@ -218,7 +233,9 @@ export default function CodingPracticePage() {
         setActiveStep(Math.max(0, Math.min(stages.length - 1, normalizedActive.activeStep)));
         setNotes(normalizedActive.notes);
         setCoachFeedback(normalizedActive.coachFeedback);
-        setCode(normalizedActive.code);
+        const files = restoredFiles(normalizedActive);
+        setProjectFiles(files);
+        setCode(normalizedActive.challenge.mode === "debug" ? joinFiles(files) : normalizedActive.code);
         setTestResults(normalizedActive.testResults);
         setFinalReview(normalizedActive.finalReview);
         setFailedAttempts(normalizedActive.failedAttempts);
@@ -266,7 +283,7 @@ export default function CodingPracticePage() {
 
   const saveCurrentChallenge = useCallback(() => {
     if (!challenge || !practiceId) return;
-    const snapshot: SavedCodingChallenge = { id: practiceId, savedAt: new Date().toISOString(), language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, testResults, finalReview, failedAttempts };
+    const snapshot: SavedCodingChallenge = { id: practiceId, savedAt: new Date().toISOString(), language, difficulty, topic, roleContext, challenge, activeStep, notes, coachFeedback, code, projectFiles, testResults, finalReview, failedAttempts };
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
       setSavedChallenges((current) => {
@@ -277,7 +294,7 @@ export default function CodingPracticePage() {
     } catch {
       setStatus("Progress could not be saved because browser storage is full.");
     }
-  }, [activeStep, challenge, coachFeedback, code, difficulty, failedAttempts, finalReview, language, notes, practiceId, roleContext, testResults, topic]);
+  }, [activeStep, challenge, coachFeedback, code, projectFiles, difficulty, failedAttempts, finalReview, language, notes, practiceId, roleContext, testResults, topic]);
 
   useEffect(() => {
     if (!isLoaded || !challenge || !practiceId) return;
@@ -301,6 +318,8 @@ export default function CodingPracticePage() {
       setPracticeId(newPracticeId());
       setChallenge(payload);
       setCode(starterFor(language, payload));
+      setProjectFiles(payload.mode === "debug" ? originalFiles(payload) : []);
+      setSelectedFile(0);
       setNotes({});
       setCoachFeedback({});
       setTestResults([]);
@@ -310,7 +329,7 @@ export default function CodingPracticePage() {
       setFailedAttempts(0);
       setActiveStep(0);
       window.localStorage.setItem(recentTitlesKey, JSON.stringify([payload.title, ...(Array.isArray(savedTitles) ? savedTitles : [])].slice(0, 12)));
-      setStatus("A fresh guided challenge is ready.");
+      setStatus(payload.mode === "debug" ? "Your debugging project is ready. Investigate the reported symptoms." : "A fresh guided challenge is ready.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "A coding challenge could not be generated.");
     } finally {
@@ -334,15 +353,30 @@ export default function CodingPracticePage() {
     setStatus(`${languageLabel(next)} selected. Generate a new challenge or continue this language-neutral problem.`);
   };
 
+  const updateEditor = (value: string) => {
+    if (challenge?.mode === "debug") {
+      const files = projectFiles.map((file, index) => index === selectedFile ? { ...file, content: value } : file);
+      if (joinFiles(files).length > 12000) { setStatus("The project is limited to 12,000 code characters."); return; }
+      setProjectFiles(files);
+      setCode(joinFiles(files));
+    } else setCode(value);
+    setTestResults([]); setRunnerError(""); setFinalReview(null); setReviewError(""); setCoachFeedback({});
+  };
+  const resetCode = () => {
+    if (challenge?.mode === "debug") { const files = originalFiles(challenge); setProjectFiles(files); setSelectedFile(0); setCode(joinFiles(files)); }
+    else setCode(starterFor(language, challenge));
+    setTestResults([]); setRunnerError(""); setFinalReview(null); setReviewError(""); setCoachFeedback({});
+  };
+
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (!["Tab", "Enter", "}", "]", ")"].includes(event.key)) return;
-    if (isRunning) return;
+    if (isRunning || isCoaching || isReviewing) return;
     const target = event.currentTarget;
-    const edit = applyCodeEditorKey({ value: code, selectionStart: target.selectionStart, selectionEnd: target.selectionEnd, key: event.key, shiftKey: event.shiftKey, language });
+    const edit = applyCodeEditorKey({ value: target.value, selectionStart: target.selectionStart, selectionEnd: target.selectionEnd, key: event.key, shiftKey: event.shiftKey, language });
     if (!edit) return;
     event.preventDefault();
     if (edit.value.length > 12000) return;
-    setCode(edit.value);
+    updateEditor(edit.value);
     setTestResults([]);
     setRunnerError("");
     setFinalReview(null);
@@ -352,7 +386,8 @@ export default function CodingPracticePage() {
   const requestStepCoaching = async (stage: CoachingStage) => {
     if (!challenge) return;
     const testEvidence = runnerError || testResults.map((result, index) => `Test ${index + 1}: ${result.passed ? "passed" : result.error || "failed"}; expected ${JSON.stringify(result.expected)}`).join("\n");
-    const work = stage === "implementation" ? `${code}\n\nTEST EVIDENCE:\n${testEvidence}` : stage === "testing" ? `${notes.testing || ""}\n${status}` : notes[stage] || "";
+    const projectContext = challenge.mode === "debug" ? projectFiles.map((file) => `FILE: ${file.name}\n${file.content}`).join("\n\n") : code;
+    const work = stage === "implementation" ? `${projectContext}\n\nTEST EVIDENCE:\n${testEvidence}` : stage === "testing" ? `${notes.testing || ""}\n${status}` : notes[stage] || "";
     if (work.trim().length < 8) {
       setStatus("Add your thinking for this step before asking the coach.");
       return;
@@ -469,7 +504,10 @@ export default function CodingPracticePage() {
     setActiveStep(Math.max(0, Math.min(stages.length - 1, saved.activeStep)));
     setNotes(saved.notes);
     setCoachFeedback(saved.coachFeedback);
-    setCode(saved.code);
+    const files = restoredFiles(saved);
+    setProjectFiles(files);
+    setSelectedFile(0);
+    setCode(saved.challenge.mode === "debug" ? joinFiles(files) : saved.code);
     setTestResults(saved.testResults);
     setFinalReview(saved.finalReview);
     setFailedAttempts(saved.failedAttempts);
@@ -490,7 +528,10 @@ export default function CodingPracticePage() {
     else setStatus(`${saved.challenge.title} was deleted.`);
   };
 
-  const current = stages[activeStep];
+  const isDebug = challenge?.mode === "debug";
+  const current = stages[isDebug ? (activeStep === 7 ? 7 : 4) : activeStep];
+  const editorValue = isDebug ? projectFiles[selectedFile]?.content || "" : code;
+  const editorLabel = isDebug ? projectFiles[selectedFile]?.name || "Project file" : `${languageLabel(language)} solution`;
   const currentFeedback = current.id === "review" ? null : coachFeedback[current.id];
   const progress = Math.round((completed.size / stages.length) * 100);
   const passed = testResults.filter((result) => result.passed).length;
@@ -504,12 +545,12 @@ export default function CodingPracticePage() {
       </header>
 
       <main className="studio-shell coding-practice-shell">
-        <section className="studio-hero coding-hero"><div><p className="eyebrow">Guided coding practice</p><h1>Learn how to solve—not just what to type.</h1><p>Work from prompt comprehension through planning, implementation, real test execution, complexity analysis, and an evidence-based AI review.</p></div><div className="hero-card"><span className="status-dot" /><div><p className="hero-card-label">Safe live demo</p><p className="hero-card-value">5 languages · sandboxed test execution</p></div></div></section>
+        <section className="studio-hero coding-hero"><div><p className="eyebrow">{(challenge?.mode || mode) === "debug" ? "Debugging practice" : "Guided coding practice"}</p><h1>{(challenge?.mode || mode) === "debug" ? "Investigate the symptoms. Repair the project." : "Learn how to solve—not just what to type."}</h1><p>{(challenge?.mode || mode) === "debug" ? "Explore existing source files, reproduce reported bugs, and test your fixes. Start directly in the code workspace." : "Work from prompt comprehension through planning, implementation, real test execution, complexity analysis, and an evidence-based AI review."}</p></div><div className="hero-card"><span className="status-dot" /><div><p className="hero-card-label">Safe live demo</p><p className="hero-card-value">5 languages · sandboxed test execution</p></div></div></section>
 
         <section className="panel coding-setup-panel">
           <div className="panel-header"><div><p className="section-label">Challenge setup</p><h2>Choose what to practice</h2></div>{challenge && <button className="ghost-button" type="button" disabled={isRunning || isGenerating || isCoaching || isReviewing} onClick={startNewChallenge}>Start new</button>}</div>
           <div className="coding-setup-grid">
-            <label className="field"><span>Language</span><select value={language} onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}>{languages.map((item) => <option value={item} key={item}>{languageLabel(item)}</option>)}</select></label>
+            <label className="field"><span>Language</span><select value={language} disabled={isGenerating || isRunning || isCoaching || isReviewing} onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}>{languages.map((item) => <option value={item} key={item}>{languageLabel(item)}</option>)}</select></label>
             <label className="field"><span>Difficulty</span><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty)}><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
             <label className="field"><span>Practice mode</span><select value={mode} onChange={(event) => setMode(event.target.value as "solve" | "debug")}><option value="solve">Build a solution</option><option value="debug">Debug and fix errors</option></select></label>
             <label className="field"><span>Topic</span><select value={topic} onChange={(event) => setTopic(event.target.value as Topic)}><option value="arrays-strings">Arrays and strings</option><option value="maps-sets">Maps and sets</option><option value="stacks-queues">Stacks and queues</option><option value="sorting-search">Sorting and searching</option><option value="recursion-dp">Recursion and dynamic programming</option><option value="practical-data">Practical data processing</option></select></label>
@@ -523,43 +564,44 @@ export default function CodingPracticePage() {
           <div className="panel-header"><div><p className="section-label">Device-local memory</p><h2>Saved coding challenges</h2><p className="memory-note">Your latest {maxSavedChallenges} challenges keep their plan, code, test results, coaching, progress, and final review in this browser.</p></div><span className="count-pill">{savedChallenges.length} saved</span></div>
           {savedChallenges.length === 0 ? <div className="memory-empty"><strong>No saved challenges yet</strong><span>Generate a challenge and your progress will save automatically.</span></div> : <div className="coding-history-list">{savedChallenges.map((saved) => {
             const completedSteps = savedProgress(saved);
+            const totalSteps = saved.challenge.mode === "debug" ? 2 : stages.length;
             const isCurrent = saved.id === practiceId;
             return <article className={`coding-history-card ${isCurrent ? "active-coding-history" : ""}`} key={saved.id}>
               <div className="coding-history-heading"><div><h3>{saved.challenge.title}</h3><p>{languageLabel(saved.language)} · {saved.difficulty} · {formatSavedDate(saved.savedAt)}</p></div>{isCurrent && <span>Active</span>}</div>
-              <div className="coding-history-progress"><div><i style={{ width: `${Math.round((completedSteps / stages.length) * 100)}%` }} /></div><span>{completedSteps} of {stages.length} steps</span></div>
-              <div className="memory-card-actions"><button className="small-action-button" type="button" disabled={isRunning || isGenerating || isCoaching || isReviewing} onClick={() => restoreSavedChallenge(saved)}>{isCurrent ? "Continue" : "Open challenge"}</button><button className="small-action-button danger-button" type="button" onClick={() => deleteSavedChallenge(saved)}>Delete</button></div>
+              <div className="coding-history-progress"><div><i style={{ width: `${Math.round((completedSteps / totalSteps) * 100)}%` }} /></div><span>{completedSteps} of {totalSteps} {saved.challenge.mode === "debug" ? "checkpoints" : "steps"}</span></div>
+              <div className="memory-card-actions"><button className="small-action-button" type="button" disabled={isRunning || isGenerating || isCoaching || isReviewing} onClick={() => restoreSavedChallenge(saved)}>{isCurrent ? "Continue" : "Open challenge"}</button><button className="small-action-button danger-button" type="button" disabled={isGenerating || isRunning || isCoaching || isReviewing} onClick={() => deleteSavedChallenge(saved)}>Delete</button></div>
             </article>;
           })}</div>}
         </section>
 
-        {!challenge ? <section className="panel coding-welcome"><div className="empty-state"><div className="empty-icon">01</div><h3>Your guided workspace will appear here</h3><p>Choose a language, difficulty, and topic. Each generated problem includes examples, constraints, safe tests, structured planning steps, and AI coaching.</p></div></section> : <>
+        {!challenge ? <section className="panel coding-welcome"><div className="empty-state"><div className="empty-icon">01</div><h3>Your workspace will appear here</h3><p>Choose a language, difficulty, and topic. Build a solution with guided planning, or investigate an existing project in debugging mode.</p></div></section> : <>
           <section className="panel challenge-overview">
             <div className="challenge-heading"><div><p className="section-label">{languageLabel(language)} · {difficulty}</p><h2>{challenge.title}</h2><p>{challenge.goal}</p></div><CopyButton text={challengeText(challenge)} label="Copy challenge" copiedLabel="Challenge copied" /></div>
             <p className="challenge-prompt">{challenge.prompt}</p>
-            {challenge.mode === "debug" && <p className="memory-note">Debugging exercise: reproduce the failure, identify the cause, and fix the supplied code. All test cases must pass before you continue.</p>}
+            {challenge.mode === "debug" && <div className="debug-bug-reports"><h3>Reported bugs</h3><ul>{(challenge.bugReports?.length ? challenge.bugReports : [challenge.prompt]).map((report, index) => <li key={index}>{report}</li>)}</ul><p>Investigate the project, make your repairs, and pass every test. Reports describe symptoms—not where to look.</p></div>}
             <div className="challenge-details"><div><h3>Examples</h3>{challenge.examples.map((item) => <code key={item}>{item}</code>)}</div><div><h3>Constraints</h3><ul>{challenge.constraints.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
             <div className="analysis-chip-list">{challenge.concepts.map((item) => <span className="analysis-chip" key={item}>{item}</span>)}</div>
           </section>
 
-          <section className="coding-progress-card" aria-label="Coding practice progress"><div><strong>{progress}% complete</strong><span>{completed.size} of {stages.length} steps</span></div><div className="coding-progress-track"><i style={{ width: `${progress}%` }} /></div><span>Progress is saved only in this browser.</span></section>
+          {!isDebug && <section className="coding-progress-card" aria-label="Coding practice progress"><div><strong>{progress}% complete</strong><span>{completed.size} of {stages.length} steps</span></div><div className="coding-progress-track"><i style={{ width: `${progress}%` }} /></div><span>Progress is saved only in this browser.</span></section>}
 
-          <section className="coding-lab-layout">
-            <aside className="panel learning-step-nav" aria-label="Problem-solving steps">{stages.map((stage, index) => {
+          <section className={`coding-lab-layout ${isDebug ? "debug-project-layout" : ""}`}>
+            {isDebug ? <aside className="panel debug-file-explorer" aria-label="Project files"><p className="section-label">Project files</p>{projectFiles.map((file, index) => <button type="button" key={file.name} className={selectedFile === index ? "active" : ""} onClick={() => { setSelectedFile(index); setActiveStep(4); }}><span aria-hidden="true">▤</span>{file.name}</button>)}<p className="memory-note">Files run together in the displayed order. No packages or file access are required.</p><button type="button" disabled={!allTestsPassed || isRunning} onClick={() => setActiveStep(7)}>Final AI review {allTestsPassed ? "→" : "🔒"}</button></aside> : <aside className="panel learning-step-nav" aria-label="Problem-solving steps">{stages.map((stage, index) => {
               const locked = index > 4 && !allTestsPassed;
               return <button className={`${activeStep === index ? "active" : ""} ${completed.has(index) ? "complete" : ""} ${locked ? "locked" : ""}`} type="button" key={stage.id} disabled={locked} onClick={() => setActiveStep(index)}><span>{locked ? "🔒" : completed.has(index) ? "✓" : stage.number}</span><div><strong>{stage.short}</strong><small>{locked ? "Pass tests to unlock" : completed.has(index) ? "Completed" : "In progress"}</small></div></button>;
-            })}</aside>
+            })}</aside>}
 
             <article className="panel guided-step-panel">
-              <div className="guided-step-heading"><span>{current.number}</span><div><p className="section-label">Problem-solving workflow</p><h2>{challenge.mode === "debug" && current.id === "implementation" ? "Diagnose and fix the code" : current.title}</h2><p>{challenge.mode === "debug" && current.id === "implementation" ? "Run the faulty implementation, inspect the failures, and make the smallest correct repair. Reset code restores the original bugs." : current.guidance}</p></div></div>
+              <div className="guided-step-heading"><span>{isDebug ? "⌘" : current.number}</span><div><p className="section-label">{isDebug ? "Debugging workspace" : "Problem-solving workflow"}</p><h2>{challenge.mode === "debug" && current.id === "implementation" ? "Diagnose and fix the code" : current.title}</h2><p>{challenge.mode === "debug" && current.id === "implementation" ? "Run the faulty implementation, inspect the failures, and make the smallest correct repair. Reset code restores the original bugs." : isDebug ? "Review your repairs after all project tests pass." : current.guidance}</p></div></div>
 
               {current.id === "implementation" ? <div className="guided-editor">
-                <div className="language-tabs" role="group" aria-label="Programming language">{languages.map((item) => <button className={language === item ? "active" : ""} type="button" key={item} disabled={isRunning || (challenge.mode === "debug" && item !== challenge.language)} onClick={() => changeLanguage(item)}>{languageLabel(item)}</button>)}</div>
-                <div className="editor-toolbar"><span>{languageLabel(language)} solution</span><small id="guided-editor-help">Tab indents · Shift+Tab outdents · Enter keeps indentation</small></div>
-                <textarea className="code-editor guided-code-editor" readOnly={isRunning} value={code} maxLength={12000} spellCheck={false} aria-label={`${languageLabel(language)} solution`} aria-describedby="guided-editor-help" onChange={(event) => { setCode(event.target.value); setTestResults([]); setRunnerError(""); setFinalReview(null); }} onKeyDown={handleEditorKeyDown} />
-                <div className="code-actions"><button className="ghost-button" type="button" disabled={isRunning} onClick={() => { setCode(starterFor(language, challenge)); setTestResults([]); setRunnerError(""); setFinalReview(null); }}>Reset code</button><CopyButton text={code} label="Copy code" copiedLabel="Code copied" /></div>
+                {!isDebug && <div className="language-tabs" role="group" aria-label="Programming language">{languages.map((item) => <button className={language === item ? "active" : ""} type="button" key={item} disabled={isRunning || (challenge.mode === "debug" && item !== challenge.language)} onClick={() => changeLanguage(item)}>{languageLabel(item)}</button>)}</div>}
+                <div className="editor-toolbar"><span>{editorLabel}</span><small id="guided-editor-help">Tab indents · Shift+Tab outdents · Enter keeps indentation</small></div>
+                <textarea className="code-editor guided-code-editor" readOnly={isRunning || isCoaching || isReviewing} value={editorValue} maxLength={12000} spellCheck={false} aria-label={editorLabel} aria-describedby="guided-editor-help" onChange={(event) => updateEditor(event.target.value)} onKeyDown={handleEditorKeyDown} />
+                <div className="code-actions"><button className="ghost-button" type="button" disabled={isRunning || isCoaching || isReviewing} onClick={resetCode}>Reset code</button><CopyButton text={editorValue} label="Copy code" copiedLabel="Code copied" /></div>
                 <section className={`implementation-test-gate ${allTestsPassed ? "passed" : ""}`}>
                   <div><p className="section-label">Required checkpoint</p><h3>{allTestsPassed ? "All tests passed—next step unlocked" : `Pass all ${challenge.tests.length} tests to continue`}</h3><p>{allTestsPassed ? "Your implementation satisfied every provided test case." : "Run your code in the sandbox. Later workflow steps stay locked until the implementation is correct."}</p></div>
-                  <button className="primary-button" type="button" onClick={runTests} disabled={isRunning}>{isRunning ? `Running ${languageLabel(language)} tests…` : allTestsPassed ? "Run tests again" : `Run ${challenge.tests.length} tests`}</button>
+                  <button className="primary-button" type="button" onClick={runTests} disabled={isRunning || isCoaching || isReviewing}>{isRunning ? `Running ${languageLabel(language)} tests…` : allTestsPassed ? "Run tests again" : `Run ${challenge.tests.length} tests`}</button>
                   {(testResults.length > 0 || runnerError) && <div className={`test-report ${runnerError || !allTestsPassed ? "tests-failed" : "tests-passed"}`} role="status"><strong>{runnerError ? "The run needs attention" : `${passed}/${challenge.tests.length} tests passed`}</strong>{runnerError && <pre className="runner-error-output">{runnerError}</pre>}{testResults.map((result, index) => <span key={index}>{result.passed ? "✓" : "×"} Test {index + 1}: input {JSON.stringify(challenge.tests[index]?.input)} → expected {JSON.stringify(result.expected)}{result.error ? ` · ${result.error}` : ""}</span>)}</div>}
                 </section>
                 {!allTestsPassed && failedAttempts < 3 && <p className="attempt-counter">Unsuccessful runs: {failedAttempts} of 3 before AI debugging support unlocks.</p>}
@@ -579,7 +621,7 @@ export default function CodingPracticePage() {
                 {!currentFeedback ? <div className="coaching-placeholder"><strong>Think first, then ask for help</strong><p>The coach responds to your reasoning, corrects misconceptions, and gives a focused hint without skipping the learning process.</p></div> : <div className="step-coaching-result"><section><h3>Coach assessment</h3><p>{currentFeedback.assessment}</p></section><section><h3>What works</h3><ul>{currentFeedback.whatWorks.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>Next actions</h3><ul>{currentFeedback.nextActions.map((item) => <li key={item}>{item}</li>)}</ul></section><section className="coach-hint"><div className="result-section-header"><h3>Focused hint</h3><CopyButton text={currentFeedback.hint} label="Copy hint" copiedLabel="Hint copied" /></div><p>{currentFeedback.hint}</p></section></div>}
               </>}
 
-              <div className="guided-step-actions"><button className="ghost-button" type="button" disabled={activeStep === 0} onClick={() => setActiveStep((value) => Math.max(0, value - 1))}>← Previous</button><button className="primary-button" type="button" disabled={activeStep === stages.length - 1 || (activeStep === 4 && !allTestsPassed)} onClick={() => setActiveStep((value) => Math.min(stages.length - 1, value + 1))}>{activeStep === 4 && !allTestsPassed ? "Pass tests to continue" : "Next step →"}</button></div>
+              {isDebug ? <div className="guided-step-actions">{current.id === "review" ? <button className="ghost-button" type="button" onClick={() => setActiveStep(4)}>Back to files</button> : <button className="primary-button" type="button" disabled={!allTestsPassed || isRunning} onClick={() => setActiveStep(7)}>Review my repairs →</button>}</div> : <div className="guided-step-actions"><button className="ghost-button" type="button" disabled={activeStep === 0} onClick={() => setActiveStep((value) => Math.max(0, value - 1))}>← Previous</button><button className="primary-button" type="button" disabled={activeStep === stages.length - 1 || (activeStep === 4 && !allTestsPassed)} onClick={() => setActiveStep((value) => Math.min(stages.length - 1, value + 1))}>{activeStep === 4 && !allTestsPassed ? "Pass tests to continue" : "Next step →"}</button></div>}
             </article>
           </section>
           <iframe key={runnerKey} ref={iframeRef} className="code-runner-frame" sandbox="allow-scripts" src="/code-runner.html" title="Restricted coding test runner" />

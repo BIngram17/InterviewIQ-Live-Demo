@@ -28,14 +28,20 @@ test("interview includes resume context, remembers it, and refuses sample substi
 
 test("debugging requires repairs, unlocks support, and preserves the original faulty code", async ({ page }) => {
   let mode = "";
-  const starter = "function solution(input) {\n  return input.length - 1;\n}";
+  let reviewedCode = "";
+  await page.route("**/api/code-feedback", async (route) => {
+    reviewedCode = route.request().postDataJSON().code;
+    await route.fulfill({ json: { score: 9, verdict: "The repair preserves the helper contract.", strengths: ["Correct output"], improvements: ["Add additional regression tests"], complexity: "Linear time." } });
+  });
+  const starter = "function measure(input) {\n  return input.length - 1;\n}";
+  const files = [{ name: "measure.js", content: starter }, { name: "billing.js", content: "function count(input) { return measure(input); }" }, { name: "solution.js", content: "function solution(input) { return count(input); }" }];
   await page.route("**/api/coding-challenge", async (route) => {
     mode = route.request().postDataJSON().mode;
     await route.fulfill({ json: {
       title: "Repair the counter", goal: "Diagnose a boundary bug", prompt: "Return the length of an ASCII string.",
       examples: ['"abc" returns 3'], constraints: ["ASCII only", "Empty input allowed"], concepts: ["Boundaries"],
       inputType: "string", outputType: "integer", language: "javascript", difficulty: "beginner", topic: "arrays-strings",
-      mode: "debug", starterCode: starter, tests: [{ input: "", expected: 0 }, { input: "a", expected: 1 }, { input: "abc", expected: 3 }],
+      mode: "debug", files, bugReports: ["Customer reports show the wrong item count."], starterCode: files.map((f) => f.content).join("\n\n"), tests: [{ input: "", expected: 0 }, { input: "a", expected: 1 }, { input: "abc", expected: 3 }],
     } });
   });
   await page.goto("/coding/");
@@ -43,8 +49,10 @@ test("debugging requires repairs, unlocks support, and preserves the original fa
   await page.getByRole("button", { name: "Generate guided challenge", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Repair the counter", exact: true })).toBeVisible();
   expect(mode).toBe("debug");
-  await page.locator(".learning-step-nav").getByRole("button", { name: /Code/ }).click();
-  const editor = page.getByRole("textbox", { name: "JavaScript solution", exact: true });
+  await expect(page.locator(".learning-step-nav")).toHaveCount(0);
+  await expect(page.getByText("Customer reports show the wrong item count.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Review my repairs/ })).toBeDisabled();
+  const editor = page.getByRole("textbox", { name: "measure.js", exact: true });
   await expect(editor).toHaveValue(starter);
   for (let attempt = 1; attempt <= 3; attempt++) {
     await page.getByRole("button", { name: "Run 3 tests", exact: true }).click();
@@ -52,13 +60,27 @@ test("debugging requires repairs, unlocks support, and preserves the original fa
     if (attempt < 3) await expect(page.locator(".attempt-counter")).toContainText("Unsuccessful runs: " + attempt);
   }
   await expect(page.getByRole("button", { name: "Get AI debugging support", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Pass tests to continue", exact: true })).toBeDisabled();
-  await editor.fill("function solution(input) { return input.length; }");
+  await expect(page.getByRole("button", { name: /Review my repairs/ })).toBeDisabled();
+  await editor.fill("function measure(input) { return input.length; }");
+  await page.getByRole("button", { name: "billing.js", exact: false }).click();
+  await expect(page.getByRole("textbox", { name: "billing.js", exact: true })).toHaveValue(files[1].content);
   await page.getByRole("button", { name: "Run 3 tests", exact: true }).click();
   await expect(page.getByRole("heading", { name: "All tests passed—next step unlocked" })).toBeVisible();
+  await page.getByRole("button", { name: /Review my repairs/ }).click();
+  await page.getByRole("button", { name: "Get final AI review", exact: true }).click();
+  await expect(page.getByText("The repair preserves the helper contract.", { exact: true })).toBeVisible();
+  expect(reviewedCode).toContain("function measure");
+  expect(reviewedCode).toContain("function count");
+  expect(reviewedCode).toContain("function solution");
+  await page.getByRole("button", { name: "Back to files", exact: true }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("interviewiq-coding-practice-v1") || "")).toContain("return input.length;");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "work/debug-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: "work/debug-desktop.png", fullPage: true });
   await page.reload();
   await expect(page.getByLabel("Practice mode")).toHaveValue("debug");
   await page.getByRole("button", { name: "Reset code", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "JavaScript solution", exact: true })).toHaveValue(starter);
+  await expect(page.getByRole("textbox", { name: "measure.js", exact: true })).toHaveValue(starter);
 });

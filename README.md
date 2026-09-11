@@ -39,8 +39,11 @@ Times New Roman 12-point DOCX export.
   browser provides the Web Speech API
 - Provides a dedicated, AI-generated Coding Practice workspace for JavaScript,
   Python, Java, C#, and Rust
-- Adds a debugging mode with faulty starter code in the chosen language,
-  test-driven repairs, reset-to-original code, and saved debugging progress
+- Adds a debugging workspace with 3–5 editable source files, symptom-based bug
+  reports, test-driven repairs, reset-to-original code, and saved file edits.
+  Debugging skips the guided planning stages; regular coding practice keeps them.
+  Projects use connected helpers/classes assembled in displayed order into one
+  sandbox compilation unit, without packages, module loading, or filesystem access.
 - Guides learners through understanding the prompt, identifying edge cases,
   planning, pseudocode, implementation, testing, complexity, and final review,
   with visible progress and free movement among unlocked steps

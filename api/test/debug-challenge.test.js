@@ -24,3 +24,18 @@ test("rubric fallback does not manufacture work or point gains for met criteria"
   assert.equal(changes[0].scoreImpact, 0);
   assert.equal(changes[0].kind, "needs-info");
 });
+test("debug projects require safe distinct files and symptom reports", () => {
+  const files = [
+    { name: "policy.js", content: "function rate() { return 0; }" },
+    { name: "billing.js", content: "function total(n) { return n - rate(); }" },
+    { name: "solution.js", content: "function solution(input) { return total(input); }" },
+  ];
+  const project = { ...fixture, files, bugReports: ["Returning customers receive no discount."] };
+  const valid = validateChallenge(project, "debug", true);
+  assert.equal(valid.files.length, 3);
+  assert.equal(valid.starterCode, files.map((f) => f.content).join("\n\n"));
+  assert.equal(validateChallenge({ ...project, bugReports: [] }, "debug", true), null);
+  assert.equal(validateChallenge({ ...project, files: files.slice(0, 2) }, "debug", true), null);
+  assert.equal(validateChallenge({ ...project, files: files.map((f) => ({ ...f, name: "same.js" })) }, "debug", true), null);
+  assert.equal(validateChallenge({ ...project, files: [{ ...files[0], name: "../policy.js" }, ...files.slice(1)] }, "debug", true), null);
+});
