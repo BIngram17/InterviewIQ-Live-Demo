@@ -255,6 +255,11 @@ export default function CodingPracticePage() {
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
       const error = typeof event.data.error === "string" ? event.data.error.slice(0, 200) : "";
       const results = Array.isArray(event.data.results) ? event.data.results.slice(0, challenge?.tests.length || 0) : [];
+      if (!error && challenge?.mode === "debug" && code === challenge.starterCode && results.length === challenge.tests.length && results.every((result: TestResult) => result.passed)) {
+        setIsRunning(false); setTestResults([]); setFinalReview(null);
+        setRunnerError("This generated project already passes every test without repairs. Generate a different challenge; this is not counted as your attempt.");
+        return;
+      }
       setRunnerError(error);
       setTestResults(results);
       setIsRunning(false);
@@ -268,7 +273,7 @@ export default function CodingPracticePage() {
       window.removeEventListener("message", onMessage);
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
-  }, [challenge?.tests.length]);
+  }, [challenge, code]);
 
   const completed = useMemo(() => {
     const done = new Set<number>();
@@ -420,6 +425,11 @@ export default function CodingPracticePage() {
         if (!response.ok || !payload) throw new Error(payload?.error || "The code sandbox is unavailable.");
         const results = Array.isArray(payload.results) ? payload.results.slice(0, challenge.tests.length) : [];
         const error = typeof payload.error === "string" ? payload.error : "";
+        if (!error && challenge.mode === "debug" && code === challenge.starterCode && results.length === challenge.tests.length && results.every((result: TestResult) => result.passed)) {
+          setTestResults([]); setFinalReview(null);
+          setRunnerError("This generated project already passes every test without repairs. Generate a different challenge; this is not counted as your attempt.");
+          return;
+        }
         setTestResults(results);
         setRunnerError(error);
         if (error || results.length !== challenge.tests.length || results.some((result: TestResult) => !result.passed)) setFailedAttempts((value) => Math.min(20, value + 1));

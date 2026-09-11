@@ -84,3 +84,17 @@ test("debugging requires repairs, unlocks support, and preserves the original fa
   await page.getByRole("button", { name: "Reset code", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "measure.js", exact: true })).toHaveValue(starter);
 });
+test("unchanged debugging projects that already pass cannot unlock review", async ({ page }) => {
+  const files = [{ name: "policy.js", content: "function amount(n) { return n; }" }, { name: "billing.js", content: "function total(n) { return amount(n); }" }, { name: "solution.js", content: "function solution(input) { return total(input); }" }];
+  await page.route("**/api/coding-challenge", route => route.fulfill({ json: {
+    title: "Checkout regression", goal: "Repair billing", prompt: "Return the correct total.", examples: ["1 returns 1"], constraints: ["Whole amounts", "Nonnegative"], concepts: [], language: "javascript", mode: "debug", files,
+    bugReports: ["Customers report wrong totals."], starterCode: files.map(f => f.content).join("\n\n"), inputType: "integer", outputType: "integer", tests: [{ input: 0, expected: 0 }, { input: 1, expected: 1 }, { input: 2, expected: 2 }],
+  } }));
+  await page.goto("/coding/");
+  await page.getByLabel("Practice mode").selectOption("debug");
+  await page.getByRole("button", { name: "Generate guided challenge", exact: true }).click();
+  await page.getByRole("button", { name: "Run 3 tests", exact: true }).click();
+  await expect(page.locator(".runner-error-output")).toContainText("already passes every test without repairs");
+  await expect(page.getByRole("button", { name: /Review my repairs/ })).toBeDisabled();
+  await expect(page.locator(".attempt-counter")).toContainText("Unsuccessful runs: 0");
+});
