@@ -30,7 +30,7 @@ export function valueMatchesExecutionType(value, type) {
   return value.every((item) => valueMatchesExecutionType(item, itemType));
 }
 
-export function validateChallenge(value, mode = "solve") {
+export function validateChallenge(value, mode = "solve", requireProject = false) {
   if (!value || typeof value !== "object") return null;
   const title = text(value.title, 140);
   const prompt = text(value.prompt, 1600);
@@ -50,7 +50,17 @@ export function validateChallenge(value, mode = "solve") {
     : [];
   if (!title || !prompt || !goal || !inputType || !outputType || examples.length < 1 || constraints.length < 2 || tests.length < 3) return null;
   if (tests.some((test) => !valueMatchesExecutionType(test.input, inputType) || !valueMatchesExecutionType(test.expected, outputType))) return null;
-  const starterCode = typeof value.starterCode === "string" ? value.starterCode.replace(/\r\n?/g, "\n").trim() : "";
+  let files;
+  const bugReports = arrayOfText(value.bugReports, 3, 500);
+  if (mode === "debug" && Array.isArray(value.files)) {
+    if (value.files.length < 3 || value.files.length > 5) return null;
+    files = value.files.map((file) => ({ name: file?.name, content: typeof file?.content === "string" ? file.content.replace(/\r\n?/g, "\n").trim() : "" }));
+    if (files.some((file) => typeof file.name !== "string" || !/^[A-Za-z][A-Za-z0-9_-]{0,45}\.(js|py|java|cs|rs)$/.test(file.name) || !file.content || file.content.length > 4000)) return null;
+    if (new Set(files.map((file) => file.name.toLowerCase())).size !== files.length) return null;
+    if (!bugReports.length) return null;
+  }
+  if (mode === "debug" && requireProject && !files) return null;
+  const starterCode = files ? files.map((file) => file.content).join("\n\n") : typeof value.starterCode === "string" ? value.starterCode.replace(/\r\n?/g, "\n").trim() : "";
   if (mode === "debug" && (!starterCode || starterCode.length > 6000 || !/\bsolution\s*\(/.test(starterCode))) return null;
-  return { title, prompt, goal, examples, constraints, concepts, inputType, outputType, tests, mode, ...(mode === "debug" ? { starterCode } : {}) };
+  return { title, prompt, goal, examples, constraints, concepts, inputType, outputType, tests, mode, ...(mode === "debug" ? { starterCode, ...(files ? { files, bugReports } : {}) } : {}) };
 }

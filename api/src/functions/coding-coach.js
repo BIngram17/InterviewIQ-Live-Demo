@@ -11,7 +11,7 @@ app.http("codingCoach", {
     const language = codingLanguages.has(body.language) ? body.language : "javascript";
     const stage = coachingStages.has(body.stage) ? body.stage : "understand";
     const challenge = codingChallengeContext(body.challenge);
-    const work = text(body.work, 5000);
+    const work = text(body.work, 14000);
     if (!challenge || work.length < 8) throw new ApiError(400, "Add your thinking for this step before asking the coach.");
 
     const raw = await completeJson({

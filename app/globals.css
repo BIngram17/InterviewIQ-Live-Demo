@@ -630,3 +630,13 @@ input:focus,textarea:focus,select:focus { border-color:rgba(124,58,237,.58); box
 }
 .interview-option { display: flex; align-items: flex-start; gap: 0.65rem; margin: 1rem 0; line-height: 1.5; }
 .interview-option input { flex: 0 0 auto; width: auto; margin-top: 0.3rem; accent-color: #7046f5; }
+.debug-project-layout { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
+.debug-file-explorer { align-self: start; min-width: 0; padding: 20px; }
+.debug-file-explorer button { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px; margin: 6px 0; border: 1px solid transparent; border-radius: 12px; background: transparent; color: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.debug-file-explorer button.active { background: rgba(124, 58, 237, .2); border-color: #8b5cf6; }
+.debug-file-explorer button:disabled { opacity: .5; cursor: not-allowed; }
+.debug-file-explorer button:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+.debug-bug-reports { margin: 20px 0; padding: 20px; border: 1px solid rgba(245, 158, 11, .4); border-radius: 16px; background: rgba(245, 158, 11, .07); overflow-wrap: anywhere; }
+.debug-bug-reports li { margin: 10px 0; }
+.debug-project-layout .editor-toolbar { flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }
+@media (max-width: 800px) { .debug-project-layout { grid-template-columns: minmax(0, 1fr); } .debug-file-explorer { position: static; } }
