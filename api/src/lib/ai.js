@@ -198,7 +198,45 @@ async function parseGeminiJson(response) {
   return JSON.parse(normalizeJsonText(content));
 }
 
-export async function completeJson({
+export async function completeJson(options) {
+  options = { ...options, requestId: crypto.randomUUID() };
+  const delayMs = Number(options.hedgeAfterMs);
+  if (!(delayMs > 0) || options.maxAttempts === 1) return completeJsonSequential(options);
+  const budget = Math.max(100, Number(options.totalTimeoutMs) || TOTAL_TIMEOUT_MS);
+  const deadline = Date.now() + budget;
+  const cancellation = new AbortController();
+  let release;
+  const ready = new Promise((resolve) => { release = resolve; });
+  const timer = setTimeout(release, Math.min(delayMs, budget));
+  const models = [...new Set(options.preferFallback
+    ? [FALLBACK_MODEL, PRIMARY_MODEL, CAPACITY_MODEL]
+    : [PRIMARY_MODEL, FALLBACK_MODEL, CAPACITY_MODEL])].slice(0, options.maxAttempts || 3);
+  const run = (modelOrder) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || cancellation.signal.aborted) throw new ApiError(504, "The AI models took too long to respond. Please try again.");
+    return completeJsonSequential({ ...options, modelOrder, maxAttempts: modelOrder.length,
+      attemptTimeoutMs: remaining, totalTimeoutMs: remaining, signal: cancellation.signal });
+  };
+  try {
+    return await Promise.any([
+      run(models.slice(0, 1)).catch((error) => { release(); throw error; }),
+      ready.then(() => {
+        if (models.length < 2) throw new ApiError(503, "No alternate AI model is configured.");
+        return run(models.slice(1));
+      }),
+    ]);
+  } catch (error) {
+    const failures = error instanceof AggregateError ? error.errors : [error];
+    throw failures.find((item) => item instanceof ApiError && item.status === 429)
+      || failures.find((item) => item instanceof ApiError) || error;
+  } finally {
+    cancellation.abort();
+    clearTimeout(timer);
+    release();
+  }
+}
+
+async function completeJsonSequential({
   system,
   data,
   maxTokens = 1800,
@@ -207,6 +245,10 @@ export async function completeJson({
   maxAttempts = 3,
   attemptTimeoutMs,
   totalTimeoutMs,
+  modelOrder,
+  signal,
+  requestId,
+  operation = "ai",
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -230,7 +272,7 @@ export async function completeJson({
   const configuredAttempts = preferFallback
     ? [FALLBACK_MODEL, PRIMARY_MODEL, CAPACITY_MODEL]
     : [PRIMARY_MODEL, FALLBACK_MODEL, CAPACITY_MODEL];
-  const modelAttempts = configuredAttempts.slice(0, Math.max(1, Math.min(3, Number(maxAttempts) || 3)));
+  const modelAttempts = [...new Set(modelOrder || configuredAttempts)].slice(0, Math.max(1, Math.min(3, Number(maxAttempts) || 3)));
 
   for (let attempt = 0; attempt < modelAttempts.length; attempt += 1) {
     const model = modelAttempts[attempt];
@@ -238,12 +280,18 @@ export async function completeJson({
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) break;
     const controller = new AbortController();
+    if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    const cancel = () => controller.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
+    const started = Date.now();
+    const cleanup = () => { clearTimeout(attemptTimeout); signal?.removeEventListener("abort", cancel); };
     const attemptTimeout = setTimeout(() => controller.abort(), Math.min(requestAttemptTimeoutMs, remainingMs));
     try {
       response = await requestGemini({ apiKey, model, system, data, maxTokens, signal: controller.signal });
     } catch (error) {
+      if (signal?.aborted) { cleanup(); throw error; }
       if (error?.name === "AbortError") sawTimeout = true;
-      else if (attempt === modelAttempts.length - 1) { clearTimeout(attemptTimeout); throw new ApiError(502, "The AI service could not be reached."); }
+      else if (attempt === modelAttempts.length - 1) { cleanup(); throw new ApiError(502, "The AI service could not be reached."); }
       response = undefined;
     }
 
@@ -253,15 +301,18 @@ export async function completeJson({
         if (typeof validate === "function" && !validate(parsed)) {
           throw new SyntaxError("Incomplete AI response shape");
         }
-        clearTimeout(attemptTimeout);
+        cleanup();
+        console.info(JSON.stringify({ event: "ai_attempt", requestId, operation, model, outcome: "valid", elapsedMs: Date.now() - started }));
         return parsed;
       } catch (error) {
+        if (signal?.aborted) { cleanup(); throw error; }
         if (controller.signal.aborted || error?.name === "AbortError") sawTimeout = true;
         else sawInvalidContent = true;
         response = undefined;
       }
     }
-    clearTimeout(attemptTimeout);
+    cleanup();
+    console.info(JSON.stringify({ event: "ai_attempt", requestId, operation, model, outcome: controller.signal.aborted ? "timeout" : response ? `http_${response.status}` : "invalid_or_unreachable", elapsedMs: Date.now() - started }));
     if (response?.status === 429) {
       const retryAfter = Number(response.headers.get("retry-after"));
       rateLimitRetryAfter = Math.max(rateLimitRetryAfter, Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 30);

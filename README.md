@@ -272,6 +272,17 @@ model that already returned a rate limit, and sends any word-count correction to
 the fallback first. Provider retry timing is returned to Resume Studio as a
 visible button countdown instead of encouraging repeated requests.
 
+Resume scoring and recommendations start an alternate model after 12 seconds
+if the primary has not returned valid output, or immediately if it fails.
+The first validated response wins and the other request is cancelled. Both
+share a 42-second budget; this may consume additional provider quota on slow
+requests. Cover-letter generation gets up to 30 seconds, with length correction
+using only the remainder of the same 42-second overall request deadline.
+If correction cannot finish, an adequate existing draft is preserved and marked
+as a draft. Model-attempt logs include a request ID, operation, model, elapsed
+time, and outcome—never resume content, prompts, or credentials. Provider
+capacity and quota failures can still affect availability.
+
 ## Project Structure
 
 ```text
