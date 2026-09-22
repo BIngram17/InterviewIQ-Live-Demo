@@ -233,3 +233,46 @@ test("a stalled response body times out and falls back after headers arrive", as
   assert.equal(result.score, 8);
   assert.equal(calls, 2);
 });
+test("hedged requests let a fallback finish while the primary stalls and cancel the loser", async () => {
+  const urls = [];
+  let cancelled = false;
+  globalThis.fetch = (url, options) => {
+    urls.push(url);
+    if (urls.length === 1) return new Promise((_, reject) => options.signal.addEventListener("abort", () => {
+      cancelled = true;
+      reject(new DOMException("Aborted", "AbortError"));
+    }));
+    return Promise.resolve(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"score":9}' }] } }] })));
+  };
+  const result = await completeJson({ system: "Score", data: {}, hedgeAfterMs: 20, totalTimeoutMs: 300, maxAttempts: 3 });
+  assert.equal(result.score, 9);
+  assert.equal(cancelled, true);
+  assert.equal(urls.length, 2);
+});
+
+test("hedged requests do not call extra models when the primary is fast", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] })); };
+  assert.equal((await completeJson({ system: "JSON", data: {}, hedgeAfterMs: 50, totalTimeoutMs: 300 })).ok, true);
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(calls, 1);
+});
+
+test("hedged requests advance immediately on rejection without repeating models", async () => {
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(url);
+    return urls.length < 3 ? new Response('{}', { status: 503 }) : new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }));
+  };
+  assert.equal((await completeJson({ system: "JSON", data: {}, hedgeAfterMs: 200, totalTimeoutMs: 300, maxAttempts: 3 })).ok, true);
+  assert.equal(new Set(urls).size, 3);
+});
+
+test("hedged requests stop both stalled models at the common deadline", async () => {
+  let cancelled = 0;
+  globalThis.fetch = (_, options) => new Promise((_, reject) => options.signal.addEventListener("abort", () => {
+    cancelled++; reject(new DOMException("Aborted", "AbortError"));
+  }));
+  await assert.rejects(completeJson({ system: "JSON", data: {}, hedgeAfterMs: 20, totalTimeoutMs: 150, maxAttempts: 2 }), error => error instanceof ApiError && error.status === 504);
+  assert.equal(cancelled, 2);
+});
