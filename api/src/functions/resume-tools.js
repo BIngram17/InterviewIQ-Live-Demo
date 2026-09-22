@@ -169,7 +169,7 @@ app.http("resumeTools", {
       preferFallback: false,
       // A third stable model provides a separate capacity path when both normal
       // models reject immediately with 429/503, without extending slow calls.
-      maxAttempts: action === "review" ? 3 : 2,
+      maxAttempts: 3,
       // Slow calls overlap with an alternate rather than starving fallback.
       // Letters reserve time for length correction within the same request.
       attemptTimeoutMs: action === "review" ? 40_000 : 30_000,

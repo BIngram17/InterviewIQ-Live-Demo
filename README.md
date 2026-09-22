@@ -267,9 +267,9 @@ fallback model receives a fresh request budget instead of inheriting an expired
 signal. The optional attempt and total timeout settings default to 17 and 50
 seconds respectively. Gemini thinking is set to `low` for these latency-sensitive
 structured JSON operations so reasoning does not consume the response budget.
-Cover-letter generation limits each stage to two model attempts, never repeats a
-model that already returned a rate limit, and sends any word-count correction to
-the fallback first. Provider retry timing is returned to Resume Studio as a
+Cover-letter generation can try all three configured models within its deadline;
+length correction is limited to two attempts and starts with the fallback.
+Each stage avoids repeating a rate-limited model. Provider retry timing is returned to Resume Studio as a
 visible button countdown instead of encouraging repeated requests.
 
 Resume scoring and recommendations start an alternate model after 12 seconds
